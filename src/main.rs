@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use actix_web::{App, HttpServer, web};
 use diesel::prelude::*;
 mod db;
@@ -22,14 +23,14 @@ async fn main() -> std::io::Result<()> {
     let pool = pg().await;
     let mut repo = PgRoomRepository{
         // conn: connection,
-        pool: &pool
+        pool: pool
     };
 
     let num = repo.sum().await;
     println!("row = {}", num);
 
     let app_state = AppState{ room_repo: repo};
-    HttpServer::new(|| {
+    HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(app_state.clone()))
             .service(routes::hello)

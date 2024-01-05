@@ -1,5 +1,6 @@
+use async_trait::async_trait;
 use crate::models::*;
-
+#[async_trait]
 pub trait RoomRepository {
-    async fn all(&mut self) -> Vec<Room>;
+    async fn all(&self) -> Vec<Room>;
 }

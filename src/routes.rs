@@ -1,10 +1,12 @@
+use std::rc::Rc;
 use actix_web::{get, HttpResponse, post, Responder, web};
 use crate::domain::repository::RoomRepository;
+use crate::infra::repository::PgRoomRepository;
 
 #[derive(Clone)]
 pub struct AppState {
-    // pub room_repo: dyn RoomRepository,
-    pub room_repo: dyn RoomRepository,
+    //pub room_repo: dyn RoomRepository,
+    pub room_repo: PgRoomRepository,
 }
 
 #[post("/echo")]
@@ -17,16 +19,19 @@ async fn hello() -> impl Responder {
     HttpResponse::Ok().body("Hello world!")
 }
 
-pub async fn manual_hello(app_state: web::Data<AppState>) -> impl Responder {
+pub async fn manual_hello(
+    // app_state: web::Data<AppState>
+) -> impl Responder {
 
-    let results = app_state.room_repo.all().await;
+    // let results = app_state.room_repo.all().await;
+    //
+    // println!("Displaying {} posts", results.len());
+    // for post in results {
+    //     println!("{}", post.title);
+    //     println!("-----------\n");
+    //     println!("{}", post.body);
+    //}
 
-    println!("Displaying {} posts", results.len());
-    for post in results {
-        println!("{}", post.title);
-        println!("-----------\n");
-        println!("{}", post.body);
-    }
-
-    HttpResponse::Ok().body("Hey there! Room total" + results.len())
+    // println!("total: {}", results.len());
+    HttpResponse::Ok().body("Hey there! Room total")
 }
