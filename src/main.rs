@@ -1,52 +1,40 @@
-use self::models::*;
-use self::schema::rooms::dsl::*;
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{App, HttpServer, web};
 use diesel::prelude::*;
 mod db;
 mod models;
 mod schema;
 mod infra;
 mod domain;
+mod routes;
 
 use infra::repository::PgRoomRepository;
+use crate::db::pg;
 use crate::domain::repository::RoomRepository;
+use crate::routes::AppState;
 
-#[get("/")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
-}
-
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
-}
-
-async fn manual_hello() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
-}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     println!("Hello, world!");
 
-    let connection = &mut db::establish_connection();
+    // let connection = &mut db::establish_connection();
 
-    let mut repo = PgRoomRepository{ conn: connection};
+    let pool = pg().await;
+    let mut repo = PgRoomRepository{
+        // conn: connection,
+        pool: &pool
+    };
 
-    let results = repo.all();
+    let num = repo.sum().await;
+    println!("row = {}", num);
 
-    println!("Displaying {} posts", results.len());
-    for post in results {
-        println!("{}", post.title);
-        println!("-----------\n");
-        println!("{}", post.body);
-    }
-
+    let app_state = AppState{ room_repo: repo};
     HttpServer::new(|| {
         App::new()
-            .service(hello)
-            .service(echo)
-            .route("/hey", web::get().to(manual_hello))
+            .app_data(web::Data::new(app_state.clone()))
+            .service(routes::hello)
+            .service(routes::echo)
+            .route("/hey", web::get().to(routes::manual_hello))
     })
     .bind(("127.0.0.1", 8080))?
     .run()
