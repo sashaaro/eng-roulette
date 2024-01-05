@@ -577,6 +577,7 @@ name = "eng-roulette"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "ahash",
  "async-trait",
  "diesel",
  "dotenvy",

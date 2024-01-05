@@ -7,32 +7,29 @@ mod schema;
 mod infra;
 mod domain;
 mod routes;
+mod state;
 
 use infra::repository::PgRoomRepository;
 use crate::db::pg;
 use crate::domain::repository::RoomRepository;
-use crate::routes::AppState;
-
+use crate::state::AppState;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     println!("Hello, world!");
 
-    // let connection = &mut db::establish_connection();
-
     let pool = pg().await;
-    let mut repo = PgRoomRepository{
-        // conn: connection,
-        pool: pool
-    };
 
-    let num = repo.sum().await;
-    println!("row = {}", num);
-
-    let app_state = AppState{ room_repo: repo};
     HttpServer::new(move || {
+        let repo = PgRoomRepository{
+            // conn: connection,
+            pool: pool.clone()
+        };
+
+        let app_state = AppState::new(repo);
+
         App::new()
-            .app_data(web::Data::new(app_state.clone()))
+            .app_data(web::Data::new(app_state))
             .service(routes::hello)
             .service(routes::echo)
             .route("/hey", web::get().to(routes::manual_hello))

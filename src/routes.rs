@@ -1,13 +1,7 @@
 use std::rc::Rc;
 use actix_web::{get, HttpResponse, post, Responder, web};
-use crate::domain::repository::RoomRepository;
-use crate::infra::repository::PgRoomRepository;
+use crate::state::AppState;
 
-#[derive(Clone)]
-pub struct AppState {
-    //pub room_repo: dyn RoomRepository,
-    pub room_repo: PgRoomRepository,
-}
 
 #[post("/echo")]
 async fn echo(req_body: String) -> impl Responder {
@@ -15,7 +9,12 @@ async fn echo(req_body: String) -> impl Responder {
 }
 
 #[get("/")]
-async fn hello() -> impl Responder {
+async fn hello(
+    app_state: web::Data<AppState>
+) -> impl Responder {
+    let num = app_state.room_repo.sum().await;
+    println!("row = {}", num);
+
     HttpResponse::Ok().body("Hello world!")
 }
 
