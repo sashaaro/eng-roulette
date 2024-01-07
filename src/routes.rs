@@ -1,5 +1,6 @@
 use std::rc::Rc;
 use actix_web::{get, HttpResponse, post, Responder, web};
+use crate::domain::repository::RoomRepository;
 use crate::state::AppState;
 
 
@@ -14,6 +15,10 @@ async fn hello(
 ) -> impl Responder {
     let num = app_state.room_repo.sum().await;
     println!("row = {}", num);
+
+    let user = app_state.room_repo.find_user(1).await;
+
+    println!("user = {}", user.is_some());
 
     HttpResponse::Ok().body("Hello world!")
 }

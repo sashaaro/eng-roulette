@@ -3,6 +3,7 @@ use diesel::prelude::*;
 pub struct User {
     pub id: i32,
     pub name: String,
+    pub available_rooms: i32
 }
 
 pub struct Room {
