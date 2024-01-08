@@ -1,6 +1,6 @@
 use dotenvy::dotenv;
 use std::env;
-use sqlx::{Pool, Postgres};
+use sqlx::{PgConnection, Pool, Postgres};
 use sqlx::postgres::PgPoolOptions;
 
 pub async fn pg() -> Pool<Postgres> {

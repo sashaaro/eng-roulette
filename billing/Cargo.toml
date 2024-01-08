@@ -6,4 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rocket = "0.5.0"
+rocket = { version = "0.5.0", features = ["json"] }
+sqlx = { version = "0.7", features = [ "runtime-tokio", "postgres" ] }
+dotenvy = "0.15"
+uuid = "1.6.1"
+async-trait = "0.1.77"
+serde = { version = "1.0.194", features = ["derive"] }

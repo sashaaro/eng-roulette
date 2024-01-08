@@ -1,13 +1,48 @@
 #[macro_use] extern crate rocket;
 
+mod application;
+mod domain;
+mod infra;
+
+use std::any::Any;
+use rocket::State;
+use crate::infra::repository::PgTxRepository;
+use rocket::serde::json::Json;
+use serde::Deserialize;
+use crate::domain::repository::TxRepository;
+
 #[get("/")]
-fn index() -> &'static str {
+async fn index() -> &'static str {
     "Hello, world!"
 }
 
+#[derive(Deserialize)]
+struct Income {
+    user_id: i32,
+    amount: i32,
+}
+#[post("/income", format = "json", data = "<data>")]
+async fn income(tx_repo: &State<Box<PgTxRepository>>, data: Json<Income>) -> &'static str {
+    application::commands::income(tx_repo.inner(), data.user_id, data.amount).await;
+    return "OK";
+}
 
 #[launch]
-fn rocket() -> _ {
+async fn rocket() -> _ {
     println!("Hello, world!");
-    rocket::build().mount("/", routes![index])
+    let pool = infra::db::pg().await;
+    let repo = PgTxRepository{
+        // conn: connection,
+        pool: pool//.clone()
+    };
+
+   // let d: Box<dyn TxRepository> = Box::new(repo);
+
+    //application::commands::income(d, 1, 2);
+    //application::commands::income(Box::new(repo), 1, 2);
+
+    rocket::build()
+        .manage(Box::new(repo.clone()))
+        // .manage(d)
+        .mount("/", routes![index, income])
 }

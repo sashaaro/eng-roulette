@@ -1,8 +1,5 @@
 use async_trait::async_trait;
 use crate::domain::repository;
-use crate::domain::repository::RoomRepository;
-use diesel::pg::PgConnection;
-use diesel::prelude::*;
 use sqlx::{Pool, Postgres, Row};
 use sqlx::Error::RowNotFound;
 use crate::domain::models::{Room, User};
