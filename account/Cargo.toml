@@ -1,5 +1,5 @@
 [package]
-name = "order"
+name = "account"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,9 +7,10 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4"
-sqlx = { version = "0.7", features = [ "runtime-tokio", "postgres" ] }
+sqlx = { version = "0.7", features = [ "runtime-tokio", "postgres", "chrono" ] }
 dotenvy = "0.15"
-uuid = "1.6.1"
+uuid = { version = "1.6.1", features = ["v6", "rng"] }
 time = "0.3.31"
+chrono = { version = "0.4.31", features = ["clock"] }
 async-trait = "0.1.77"
 ahash = "0.8.7"

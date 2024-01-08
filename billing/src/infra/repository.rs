@@ -12,12 +12,6 @@ pub struct PgTxRepository {
     pub pool: Pool<Postgres>,
 }
 
-impl PgTxRepository {
-    pub async fn sum(&self) -> i64 {
-        let row: (i64, ) = sqlx::query_as("SELECT $1 + 100").bind(150_i64).fetch_one(&self.pool).await.unwrap();
-        return row.0
-    }
-}
 #[async_trait]
 impl repository::TxRepository for PgTxRepository {
     async fn balance(&self, user_id: i32) -> Result<i32, Box<dyn Error>> {
@@ -50,6 +44,8 @@ impl repository::TxRepository for PgTxRepository {
     async fn prepare_expense(&self, tx_id: Tx2pcID, user_id: i32, amount: i32) -> Result<(), Box<dyn Error>> {
         let mut tx = self.pool.begin().await?;
 
+        // TODO try lock
+
         sqlx::query(
             "INSERT INTO transaction_history(user_id, tx_type, amount) VALUES ($1, $2, $3)",
         )
@@ -59,10 +55,14 @@ impl repository::TxRepository for PgTxRepository {
             .execute(&mut *tx)
             .await?;
 
+        let balance = self.balance(user_id).await?;
+        if balance < 0 {
+            return tx.rollback() // throw special negative balance error
+        }
+
         sqlx::query(
-            "PREPARE TRANSACTION $1",
+            &*format!("PREPARE TRANSACTION '{}';", tx_id),
         )
-            .bind(tx_id)
             .execute(&mut *tx)
             .await?;
 
@@ -71,9 +71,8 @@ impl repository::TxRepository for PgTxRepository {
 
     async fn commit_expense(&self, tx_id: Tx2pcID) -> Result<(), Box<dyn Error>> {
         sqlx::query(
-            "COMMIT PREPARED $1",
+            &*format!("COMMIT PREPARED '{}';", tx_id),
         )
-            .bind(tx_id)
             .execute(&self.pool)
             .await?;
 
@@ -82,9 +81,8 @@ impl repository::TxRepository for PgTxRepository {
 
     async fn rollback_expense(&self, tx_id: Tx2pcID) -> Result<(), Box<dyn Error>> {
         sqlx::query(
-            "ROLLBACK PREPARED $1",
+            &*format!("ROLLBACK PREPARED '{}';", tx_id),
         )
-            .bind(tx_id)
             .execute(&self.pool)
             .await?;
 

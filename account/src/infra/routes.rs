@@ -1,6 +1,9 @@
+use std::error::Error;
+use std::fmt::format;
 use std::rc::Rc;
 use actix_web::{get, HttpResponse, post, Responder, web};
-use crate::domain::repository::RoomRepository;
+use crate::domain::models::User;
+use crate::domain::repository::UserRepository;
 use crate::infra::state::AppState;
 
 
@@ -18,9 +21,10 @@ async fn hello(
 
     let user = app_state.room_repo.find_user(1).await;
 
-    println!("user = {}", user.is_some());
-
-    HttpResponse::Ok().body("Hello world!")
+    match user {
+        Ok(_) => HttpResponse::Ok().body(format!("user = {:?}", user)),
+        Err(_) => HttpResponse::NotFound().body("not found")
+    }
 }
 
 pub async fn manual_hello(

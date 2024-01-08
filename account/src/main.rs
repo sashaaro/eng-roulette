@@ -1,11 +1,10 @@
-use std::rc::Rc;
 use actix_web::{App, HttpServer, web};
-use diesel::prelude::*;
+use crate::infra::repository::PgUserRepository;
+
 mod infra;
 mod domain;
+mod application;
 
-use infra::repository::PgRoomRepository;
-use crate::domain::repository::RoomRepository;
 use crate::infra::state::AppState;
 
 #[actix_web::main]
@@ -15,7 +14,7 @@ async fn main() -> std::io::Result<()> {
     let pool = infra::db::pg().await;
 
     HttpServer::new(move || {
-        let repo = PgRoomRepository{
+        let repo = PgUserRepository{
             // conn: connection,
             pool: pool.clone()
         };

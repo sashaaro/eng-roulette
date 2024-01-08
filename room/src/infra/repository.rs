@@ -18,27 +18,6 @@ impl PgRoomRepository {
 }
 #[async_trait]
 impl repository::RoomRepository for PgRoomRepository {
-    async fn find_user(&self, id: i64) -> Option<User> {
-        let row = sqlx::query(
-            "SELECT * FROM users WHERE id = $1",
-        ).bind(id).fetch_one(&self.pool).await;
-
-        match row {
-            Ok(result) => {
-                Some(User{
-                    id: result.get("id"),
-                    name: result.get("name"),
-                    available_rooms: result.get("available_rooms"),
-                })
-            },
-            Err(e) => {
-                match e {
-                    RowNotFound => None,
-                    _ =>  panic!("{:?}", e)
-                }
-            } // TODO return error
-        }
-    }
     async fn all(&self) -> Vec<Room> {
         // let list = sqlx::query_as!(Room, "SELECT * FROM rooms").fetch_all(self.pool).await.unwrap();
         // return list
