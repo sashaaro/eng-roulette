@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use actix_web::{get, HttpResponse, post, Responder, web};
 use crate::domain::repository::RoomRepository;
-use crate::state::AppState;
+use crate::infra::state::AppState;
 
 
 #[post("/echo")]

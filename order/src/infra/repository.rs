@@ -1,12 +1,11 @@
 use async_trait::async_trait;
 use crate::domain::repository;
 use crate::domain::repository::RoomRepository;
-use crate::models::{Room, User};
 use diesel::pg::PgConnection;
-use crate::schema::rooms::dsl::rooms;
 use diesel::prelude::*;
 use sqlx::{Pool, Postgres, Row};
 use sqlx::Error::RowNotFound;
+use crate::domain::models::{Room, User};
 
 #[derive(Clone)]
 pub struct PgRoomRepository {
