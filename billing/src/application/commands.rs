@@ -1,7 +1,7 @@
 use std::error::Error;
 use crate::domain::repository::{Tx2pcID, TxRepository};
 
-pub async fn income(tx_repo: &Box<dyn TxRepository>, user_id: i32, amount: i32) -> Result<(), Box<dyn Error>> {
+pub async fn income(tx_repo: Box<dyn TxRepository + Send>, user_id: i32, amount: i32) -> Result<(), Box<dyn Error>> {
     return tx_repo.income(user_id, amount).await
 }
 

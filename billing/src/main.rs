@@ -23,7 +23,8 @@ struct Income {
 }
 #[post("/income", format = "json", data = "<data>")]
 async fn income(tx_repo: &State<Box<PgTxRepository>>, data: Json<Income>) -> &'static str {
-    application::commands::income(tx_repo.inner(), data.user_id, data.amount).await;
+    let repo = tx_repo.inner();
+    application::commands::income(repo.clone(), data.user_id, data.amount).await;
     return "OK";
 }
 
@@ -36,13 +37,16 @@ async fn rocket() -> _ {
         pool: pool//.clone()
     };
 
-   // let d: Box<dyn TxRepository> = Box::new(repo);
+   //let d: Box<dyn TxRepository + Send> = Box::new(repo);
 
-    //application::commands::income(d, 1, 2);
+    //let res = application::commands::income(d, 1, 2).await;
     //application::commands::income(Box::new(repo), 1, 2);
 
     rocket::build()
         .manage(Box::new(repo.clone()))
-        // .manage(d)
-        .mount("/", routes![index, income])
+        //.manage(d)
+        .mount("/", routes![
+            index,
+            income
+        ])
 }
