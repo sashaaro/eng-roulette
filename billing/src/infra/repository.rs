@@ -57,7 +57,7 @@ impl repository::TxRepository for PgTxRepository {
 
         let balance = self.balance(user_id).await?;
         if balance < 0 {
-            return tx.rollback() // throw special negative balance error
+            return Ok(tx.rollback().await?) // throw special negative balance error
         }
 
         sqlx::query(

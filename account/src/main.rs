@@ -1,5 +1,6 @@
 use actix_web::{App, HttpServer, web};
 use crate::infra::repository::PgUserRepository;
+use crate::infra::service::InternalBillingService;
 
 mod infra;
 mod domain;
@@ -14,17 +15,21 @@ async fn main() -> std::io::Result<()> {
     let pool = infra::db::pg().await;
 
     HttpServer::new(move || {
-        let repo = PgUserRepository{
+        let user_repo = PgUserRepository{
             // conn: connection,
             pool: pool.clone()
         };
 
-        let app_state = AppState::new(repo);
+        let billing = Box::new(InternalBillingService{
+            client: reqwest::ClientBuilder::new().build()?
+        });
+
+        let app_state = AppState::new(user_repo, billing);
 
         App::new()
             .app_data(web::Data::new(app_state))
             .service(infra::routes::hello)
-            .service(infra::routes::echo)
+            .service(infra::routes::buypremium)
             .route("/hey", web::get().to(infra::routes::manual_hello))
     })
     .bind(("127.0.0.1", 8080))?

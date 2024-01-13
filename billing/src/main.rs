@@ -5,6 +5,7 @@ mod domain;
 mod infra;
 
 use std::any::Any;
+use std::error::Error;
 use rocket::State;
 use crate::infra::repository::PgTxRepository;
 use rocket::serde::json::Json;
@@ -23,10 +24,12 @@ struct Income {
 }
 
 #[post("/income", format = "json", data = "<data>")]
-async fn income(tx_repo: &State<Box<PgTxRepository>>, data: Json<Income>) -> &'static str {
+async fn income(tx_repo: &State<Box<PgTxRepository>>, data: Json<Income>) -> String {
     let repo = tx_repo.inner();
-    application::commands::income(repo.clone(), data.user_id, data.amount).await;
-    return "OK";
+    match application::commands::income(repo.clone(), data.user_id, data.amount).await {
+        Ok(_) => "Ok".to_string(),
+        Err(err) => format!("{:?}", err)
+    }
 }
 
 #[derive(Deserialize)]
