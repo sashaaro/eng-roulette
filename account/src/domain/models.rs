@@ -1,10 +1,11 @@
-use std::time::SystemTime;
+use chrono::NaiveDateTime;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct User {
     pub id: i32,
     pub name: String,
     pub is_active: bool, // or banned
-    pub premium_until: Option<chrono::DateTime<chrono::Utc>>
+    pub premium_until: Option<NaiveDateTime>
 }
 

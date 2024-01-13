@@ -22,8 +22,9 @@ async fn hello(
     let user = app_state.room_repo.find_user(1).await;
 
     match user {
-        Ok(_) => HttpResponse::Ok().body(format!("user = {:?}", user)),
-        Err(_) => HttpResponse::NotFound().body("not found")
+        Ok(None) => HttpResponse::NotFound().body("user not found"),
+        Ok(user) => HttpResponse::Ok().json(user),
+        Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err))
     }
 }
 

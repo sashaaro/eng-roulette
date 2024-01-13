@@ -3,10 +3,11 @@ use std::fmt;
 use std::time::SystemTime;
 use actix_web::error::{DispatchError, ErrorUnauthorized};
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use crate::domain::repository;
 use sqlx::{Pool, Postgres, Row};
 use sqlx::Error::RowNotFound;
+use sqlx::postgres::PgRow;
 use crate::domain::models::{User};
 use crate::domain::repository::Tx2pcID;
 
@@ -36,26 +37,36 @@ impl Error for UserNotFoundError{}
 
 #[async_trait]
 impl repository::UserRepository for PgUserRepository {
-    async fn find_user(&self, id: i64) -> Result<User, Box<dyn Error>> {
+    async fn find_user(&self, id: i64) -> Result<Option<User>, Box<dyn Error>> {
         let row = sqlx::query(
-            "SELECT * FROM users WHERE id = $1",
-        ).bind(id).fetch_one(&self.pool).await?;
-
-        Ok(User {
-            id: row.get("id"),
-            name: row.get("name"),
-            is_active: row.get("is_active"),
-            premium_until: row.get("premium_until")
-        })
+            "SELECT * FROM \"user\" WHERE id = $1",
+        ).bind(id).fetch_one(&self.pool).await;
+        match row {
+            Ok(row) => {
+                let u = User {
+                    id: row.get("id"),
+                    name: row.get("name"),
+                    is_active: row.get("is_active"),
+                    premium_until: row.get("premium_until"),
+                };
+                Ok(Some(u))
+            },
+            Err(err) => {
+                match err {
+                    RowNotFound => Ok(None),
+                    _ => Err(Box::try_from(err).unwrap())
+                }
+            }
+        }
     }
 
-    async fn prepare_premium_until(&self, tx_id: Tx2pcID, user_id: i64, util: chrono::DateTime<Utc>) -> Result<(), Box<dyn Error>> {
+    async fn prepare_premium_until(&self, tx_id: Tx2pcID, user_id: i32, util: chrono::DateTime<Utc>) -> Result<(), Box<dyn Error>> {
         let mut tx = self.pool.begin().await?;
 
         // TODO try lock
 
         let result = sqlx::query(
-            "UPDATE user SET premium_util = $1 WHERE id = $2",
+            "UPDATE \"user\" SET premium_util = $1 WHERE id = $2",
         )
             .bind(util)
             .bind(user_id)
