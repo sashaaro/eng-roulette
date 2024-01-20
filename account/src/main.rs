@@ -21,14 +21,14 @@ async fn main() -> std::io::Result<()> {
         };
 
         let billing = Box::new(InternalBillingService{
-            client: reqwest::ClientBuilder::new().build()?
+            client: reqwest::ClientBuilder::new().build().expect("fail to create request client")
         });
 
-        let app_state = AppState::new(user_repo, billing);
+        let app_state = AppState::new(Box::new(user_repo), billing);
 
         App::new()
             .app_data(web::Data::new(app_state))
-            .service(infra::routes::hello)
+            .service(infra::routes::get_account)
             .service(infra::routes::buypremium)
             .route("/hey", web::get().to(infra::routes::manual_hello))
     })

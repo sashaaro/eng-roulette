@@ -1,11 +1,14 @@
 #[macro_use] extern crate rocket;
+extern crate core;
 
 mod application;
 mod domain;
 mod infra;
 
+use core::fmt;
 use std::any::Any;
 use std::error::Error;
+use std::fmt::{Debug, Formatter};
 use rocket::State;
 use crate::infra::repository::PgTxRepository;
 use rocket::serde::json::Json;
@@ -61,10 +64,64 @@ async fn commit_expense(tx_repo: &State<Box<PgTxRepository>>, data: Json<Expense
     return "OK";
 }
 
+fn print_number<T: std::fmt::Display>(x: T) {
+    println!("{}", x);
+}
 
+fn print_number2(x: impl std::fmt::Display) {
+    println!("{}", x);
+}
+
+fn mapp<U, T>(f: impl FnOnce(T)) -> Option<U> {
+    return None
+}
+fn mappp<U, T, F>(f: F) -> Option<U> where F: FnOnce(T) -> U {
+    return None
+}
+
+#[derive(Debug)]
+struct ErrorOne;
+impl Error for ErrorOne{}
+impl fmt::Display for ErrorOne {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "error one")
+    }
+}
+
+#[derive(Debug)]
+struct ErrorTwo;
+impl Error for ErrorTwo{}
+impl fmt::Display for ErrorTwo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "error two")
+    }
+}
+
+// fn return_error(input: u8) -> Result<String, impl Error> {
+//     match input {
+//         0 => Err(ErrorOne),
+//         1 => Err(ErrorTwo),
+//         _ => Ok("no error".to_string())
+//     }
+// }
+
+// pub fn notify<T: Debug>(item: &T) {
+//     println!("Breaking news! {}", item.summarize());
+// }
 
 #[launch]
 async fn rocket() -> _ {
+    let a = 5;
+    let b = 10.0;
+    print_number(a);
+    print_number(b);
+    print_number2(a);
+    print_number2(b);
+    // println!("error 1: {:?}", return_error(0));
+    // println!("error 1: {:?}", return_error(1));
+    // println!("error 1: {:?}", return_error(2));
+
+
     println!("Hello, world!");
     let pool = infra::db::pg().await;
     let repo = PgTxRepository{

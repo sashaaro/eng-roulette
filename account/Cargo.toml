@@ -10,7 +10,7 @@ actix-web = "4"
 sqlx = { version = "0.7", features = [ "runtime-tokio", "postgres", "chrono" ] }
 serde = "1.0.194"
 dotenvy = "0.15"
-uuid = { version = "1.6.1", features = ["v6", "rng"] }
+uuid = { version = "1.6.1", features = ["v6", "rng", "serde"] }
 time = "0.3.31"
 chrono = { version = "0.4.31", features = ["clock", "serde"] }
 async-trait = "0.1.77"

@@ -13,3 +13,10 @@ pub trait TxRepository {
     async fn commit_expense(&self, tx_id: Tx2pcID) -> Result<(), Box<dyn Error>>;
     async fn rollback_expense(&self, tx_id: Tx2pcID) -> Result<(), Box<dyn Error>>;
 }
+// fn a (d: impl TxRepository) {
+//
+// }
+//
+// fn aa (d: dyn TxRepository) {
+//
+// }

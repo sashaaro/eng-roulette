@@ -13,20 +13,22 @@ async fn buypremium(
     req_body: String,
     app_state: web::Data<AppState>
 ) -> impl Responder {
-    match buy_premium(app_state.billing , app_state.user_repo, 1).await {
+    match buy_premium(&app_state.billing, &app_state.user_repo, 1).await {
         Ok(()) => HttpResponse::Ok().body("ok"),
         Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err))
     }
+    // HttpResponse::Ok().body("ok")
 }
 
-#[get("/")]
-async fn hello(
-    app_state: web::Data<AppState>
+#[get("/account/{id}")]
+async fn get_account(
+    app_state: web::Data<AppState>,
+    id: web::Path<i64>
 ) -> impl Responder {
     let num = app_state.user_repo.sum().await;
     println!("row = {}", num);
 
-    let user = app_state.user_repo.find_user(1).await;
+    let user = app_state.user_repo.find_user(id.into_inner()).await;
 
     match user {
         Ok(None) => HttpResponse::NotFound().body("user not found"),
