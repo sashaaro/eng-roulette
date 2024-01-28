@@ -5,14 +5,28 @@ use crate::infra::service::InternalBillingService;
 mod infra;
 mod domain;
 mod application;
+use std::env;
+use std::net::{ToSocketAddrs};
 
 use crate::infra::state::AppState;
 
-#[actix_web::main]
+#[tokio::main]
 async fn main() -> std::io::Result<()> {
+    main2().await
+}
+
+//#[actix_web::main]
+async fn main2() -> std::io::Result<()> {
     println!("Hello, world!");
 
     let pool = infra::db::pg().await;
+
+    let port = env::var_os("HTTP_PORT")
+        .map(|val| val.to_str()
+            .expect("invalid port")
+            .to_string().parse::<u16>()
+            .expect("invalid port"))
+        .unwrap_or(8080);
 
     HttpServer::new(move || {
         let user_repo = PgUserRepository{
@@ -32,7 +46,7 @@ async fn main() -> std::io::Result<()> {
             .service(infra::routes::buypremium)
             .route("/hey", web::get().to(infra::routes::manual_hello))
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("127.0.0.1", port))?
     .run()
     .await
 }

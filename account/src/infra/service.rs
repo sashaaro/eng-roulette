@@ -10,13 +10,13 @@ pub struct InternalBillingService {
 
 #[derive(Deserialize, Serialize)]
 struct income {
-    user_id: i32,
-    amount: i32,
+    user_id: i64,
+    amount: i64,
     tx_id: Option<Tx2pcID>
 }
 #[async_trait]
 impl crate::domain::service::BillingService for InternalBillingService {
-    async fn income(&self, user_id: i32, amount: i32) -> Result<(), Box<dyn Error>> {
+    async fn income(&self, user_id: i64, amount: i64) -> Result<(), Box<dyn Error>> {
         let resp = self.client.post("http://localhost:8000/income").json(&income{
             user_id,
             amount,
@@ -29,14 +29,14 @@ impl crate::domain::service::BillingService for InternalBillingService {
         Ok(())
     }
 
-    async fn prepare_expense(&self, tx_id: Tx2pcID, user_id: i32, amount: i32) -> Result<(), Box<dyn Error>> {
-        let resp = self.client.post("http://localhost:8000/prepare_expense").json(&income{
+    async fn prepare_expense(&self, tx_id: Tx2pcID, user_id: i64, amount: i64) -> Result<(), Box<dyn Error>> {
+        let resp = self.client.post("http://localhost:8081/prepare_expense").json(&income{
             user_id,
             amount,
             tx_id: Some(tx_id),
         }).send()
             .await?
-            .json::<String>()
+            .text()
             .await?;
         println!("{:#?}", resp);
         Ok(())
@@ -48,11 +48,11 @@ impl crate::domain::service::BillingService for InternalBillingService {
             tx_id: Tx2pcID
         }
 
-        let resp = self.client.post("http://localhost:8000/commit_expense").json(&req{
+        let resp = self.client.post("http://localhost:8081/commit_expense").json(&req{
             tx_id: tx_id,
         }).send()
             .await?
-            .json::<String>()
+            .text()
             .await?;
         println!("{:#?}", resp);
         Ok(())

@@ -60,16 +60,14 @@ impl repository::UserRepository for PgUserRepository {
         }
     }
 
-    async fn prepare_premium_until(&self, tx_id: Tx2pcID, user_id: i32, util: chrono::DateTime<Utc>) -> Result<(), Box<dyn Error>> {
+    async fn prepare_premium_until(&self, tx_id: Tx2pcID, user_id: i64, until: chrono::DateTime<Utc>) -> Result<(), Box<dyn Error>> {
         let mut tx = self.pool.begin().await?;
 
         // TODO try lock
 
-        let result = sqlx::query(
-            "UPDATE \"user\" SET premium_util = $1 WHERE id = $2",
-        )
-            .bind(util)
-            .bind(user_id)
+        let result = sqlx::query!(
+            "UPDATE \"user\" SET premium_until = $1 WHERE id = $2",
+        until.naive_local(), i32::try_from(user_id).expect(""))
             .execute(&mut *tx)
             .await?;
 
@@ -79,7 +77,7 @@ impl repository::UserRepository for PgUserRepository {
         }
 
         sqlx::query(
-            &*format!("PREPARE TRANSACTION '{}';", tx_id),
+            &*format!("PREPARE TRANSACTION 'acc_{}';", tx_id),
         )
             .execute(&mut *tx)
             .await?;
@@ -89,7 +87,7 @@ impl repository::UserRepository for PgUserRepository {
 
     async fn commit_premium_until(&self, tx_id: Tx2pcID) -> Result<(), Box<dyn Error>> {
         sqlx::query(
-            &*format!("COMMIT PREPARED '{}';", tx_id),
+            &*format!("COMMIT PREPARED 'acc_{}';", tx_id),
         )
             .execute(&self.pool)
             .await?;
@@ -99,7 +97,7 @@ impl repository::UserRepository for PgUserRepository {
 
     async fn rollback_premium_until(&self, tx_id: Tx2pcID) -> Result<(), Box<dyn Error>> {
         sqlx::query(
-            &*format!("ROLLBACK PREPARED '{}';", tx_id),
+            &*format!("ROLLBACK PREPARED 'acc_{}';", tx_id),
         )
             .execute(&self.pool)
             .await?;

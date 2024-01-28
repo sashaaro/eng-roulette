@@ -7,6 +7,7 @@ mod infra;
 
 use core::fmt;
 use std::any::Any;
+use std::env;
 use std::error::Error;
 use std::fmt::{Debug, Formatter};
 use rocket::State;
@@ -22,8 +23,8 @@ async fn index() -> &'static str {
 
 #[derive(Deserialize)]
 struct Income {
-    user_id: i32,
-    amount: i32,
+    user_id: i64,
+    amount: i64,
 }
 
 #[post("/income", format = "json", data = "<data>")]
@@ -37,8 +38,8 @@ async fn income(tx_repo: &State<Box<PgTxRepository>>, data: Json<Income>) -> Str
 
 #[derive(Deserialize)]
 struct Expense {
-    user_id: i32,
-    amount: i32,
+    user_id: i64,
+    amount: i64,
     tx_id: Tx2pcID,
 }
 
@@ -53,8 +54,14 @@ async fn prepare_expense(tx_repo: &State<Box<PgTxRepository>>, data: Json<Expens
     return "OK";
 }
 
+
+#[derive(Deserialize)]
+struct CommitReq {
+    tx_id: Tx2pcID,
+}
+
 #[post("/commit_expense", format = "json", data = "<data>")]
-async fn commit_expense(tx_repo: &State<Box<PgTxRepository>>, data: Json<Expense>) -> &'static str {
+async fn commit_expense(tx_repo: &State<Box<PgTxRepository>>, data: Json<CommitReq>) -> &'static str {
     let repo = tx_repo.inner();
     let res = application::commands::commit_expense(repo.clone(), data.tx_id.clone()).await;
     if res.is_err() {

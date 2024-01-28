@@ -1,8 +1,4 @@
-use std::error::Error;
-use std::fmt::format;
-use std::rc::Rc;
 use actix_web::{get, HttpResponse, post, Responder, web};
-use crate::domain::models::User;
 use crate::domain::repository::UserRepository;
 use crate::application::account::buy_premium;
 use crate::infra::state::AppState;
@@ -15,7 +11,9 @@ async fn buypremium(
 ) -> impl Responder {
     match buy_premium(&app_state.billing, &app_state.user_repo, 1).await {
         Ok(()) => HttpResponse::Ok().body("ok"),
-        Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err))
+        Err(err) => {
+            HttpResponse::NotFound().body(format!("err: {:?}", err))
+        }
     }
     // HttpResponse::Ok().body("ok")
 }
