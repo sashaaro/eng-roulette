@@ -1,5 +1,8 @@
 use std::error::Error;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 use async_trait::async_trait;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use crate::domain::repository::Tx2pcID;
 
@@ -48,13 +51,34 @@ impl crate::domain::service::BillingService for InternalBillingService {
             tx_id: Tx2pcID
         }
 
-        let resp = self.client.post("http://localhost:8081/commit_expense").json(&req{
+        match self.client.post("http://localhost:8081/commit_expense").json(&req{
             tx_id: tx_id,
-        }).send()
-            .await?
-            .text()
-            .await?;
-        println!("{:#?}", resp);
-        Ok(())
+        }).send().await?.status() {
+            StatusCode::OK => Ok(()),
+            _ => Err(Box::new(MyError::new("wrong"))),
+        }
     }
+}
+
+
+
+#[derive(Debug)]
+struct MyError {
+    details: String
+}
+
+impl MyError {
+    fn new(msg: &str) -> MyError {
+        MyError{details: msg.to_string()}
+    }
+}
+
+impl Display for MyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,"{}",self.details)
+    }
+}
+
+impl Error for MyError {
+
 }

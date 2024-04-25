@@ -1,13 +1,73 @@
-use actix_web::{get, HttpResponse, post, Responder, web};
+use actix_web::{get, HttpRequest, HttpResponse, post, Responder, web};
+use jsonwebtoken;
 use crate::domain::repository::UserRepository;
-use crate::application::account::buy_premium;
+use crate::application::account::{buy_premium, create_user};
 use crate::infra::state::AppState;
+use serde::{Deserialize, Serialize};
+use crate::infra::auth::{AuthManager, Claims};
+
+
+#[derive(Deserialize, Serialize, Debug)]
+struct RegisterBody {
+    name: String,
+    password: String
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct RegisterResp{
+    token: String,
+}
+
+const JWT_TTL: i64= 60;
+
+#[post("/register")]
+async fn register(
+    req_body: String,
+    app_state: web::Data<AppState>,
+    auth_manager: web::Data<AuthManager>
+) -> impl Responder {
+    let body = serde_json::from_str::<RegisterBody>(req_body.as_str());
+    if body.is_err() {
+        return HttpResponse::BadRequest().body(format!("err: {:?}", body.err()));
+    }
+
+    let b = body.unwrap();
+    match create_user(&app_state.user_repo, b.name, b.password).await {
+        Ok(user) => {
+            let token = auth_manager.auth_header(Claims {
+                sub: user.id,
+                exp: chrono::Utc::now().timestamp() + JWT_TTL,
+            });
+
+            HttpResponse::Ok().json(&RegisterResp{
+                token: token
+            })
+        },
+        Err(err) => {
+            HttpResponse::NotFound().body(format!("err: {:?}", err))
+        }
+    }
+ }
+
+#[get("/me")]
+async fn me(
+    req: HttpRequest,
+    auth_manager: web::Data<AuthManager>
+) -> impl Responder {
+    let token = auth_manager.fetch_claims_from_req(&req);
+
+    if token.is_err() {
+        return HttpResponse::BadRequest().body(format!("err: {:?}", token.err()));
+    }
+
+     HttpResponse::Ok().body(token.unwrap().sub.to_string())
+}
+
 
 
 #[post("/buy_premium")]
 async fn buypremium(
-    req_body: String,
-    app_state: web::Data<AppState>
+    app_state: web::Data<AppState>,
 ) -> impl Responder {
     match buy_premium(&app_state.billing, &app_state.user_repo, 1).await {
         Ok(()) => HttpResponse::Ok().body("ok"),
@@ -33,21 +93,4 @@ async fn get_account(
         Ok(user) => HttpResponse::Ok().json(user),
         Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err))
     }
-}
-
-pub async fn manual_hello(
-    // app_state: web::Data<AppState>
-) -> impl Responder {
-
-    // let results = app_state.room_repo.all().await;
-    //
-    // println!("Displaying {} posts", results.len());
-    // for post in results {
-    //     println!("{}", post.title);
-    //     println!("-----------\n");
-    //     println!("{}", post.body);
-    //}
-
-    // println!("total: {}", results.len());
-    HttpResponse::Ok().body("Hey there! Room total")
 }

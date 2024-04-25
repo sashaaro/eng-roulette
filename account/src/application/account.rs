@@ -1,6 +1,7 @@
 use std::error::Error;
 use chrono::{Utc, Duration};
 use uuid::{Uuid};
+use crate::domain::models::User;
 use crate::domain::repository::UserRepository;
 use crate::domain::service::BillingService;
 
@@ -19,4 +20,12 @@ pub async fn buy_premium<T: BillingService+ 'static + ?Sized, A: UserRepository+
     billing.prepare_expense(txID, user_id, PREMIUM_COST).await?;
     user_repo.commit_premium_until(txID).await?;
     billing.commit_expense(txID).await
+}
+
+pub async fn create_user<A: UserRepository+ 'static>(
+    user_repo: &Box< A >,
+    name: String,
+    password: String,
+) -> Result<User, Box<dyn Error>> {
+    user_repo.create_user(name, password).await
 }

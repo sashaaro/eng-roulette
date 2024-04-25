@@ -1,10 +1,8 @@
-use crate::domain::repository::UserRepository;
 use crate::infra::repository::{PgUserRepository};
-use ahash::{AHashMap, RandomState};
+use ahash::{RandomState};
 use std::any::Any;
 use std::any::TypeId;
 use crate::domain::service::BillingService;
-use crate::infra::service::InternalBillingService;
 use std::collections::HashMap;
 
 pub struct AppState {
@@ -15,7 +13,10 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(user_repo: Box<PgUserRepository>, billing: Box<dyn BillingService>) -> AppState {
+    pub fn new(
+        user_repo: Box<PgUserRepository>,
+        billing: Box<dyn BillingService>,
+    ) -> AppState {
         AppState {
             user_repo,
             billing,

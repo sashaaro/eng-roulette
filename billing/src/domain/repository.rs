@@ -4,7 +4,7 @@ use uuid;
 pub type Tx2pcID = String;
 
 #[async_trait]
-pub trait TxRepository {
+pub trait TxRepository: Send + Sync {
     async fn balance(&self, user_id: i64) -> Result<i64, Box<dyn Error>>;
     async fn income(&self, user_id: i64, amount: i64) -> Result<(), Box<dyn Error>>;
 

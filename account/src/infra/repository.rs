@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::error::Error;
 use std::fmt;
 use std::time::SystemTime;
@@ -5,7 +6,7 @@ use actix_web::error::{DispatchError, ErrorUnauthorized};
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use crate::domain::repository;
-use sqlx::{Pool, Postgres, Row};
+use sqlx::{Executor, Pool, Postgres, Row};
 use sqlx::Error::RowNotFound;
 use sqlx::postgres::PgRow;
 use crate::domain::models::{User};
@@ -37,6 +38,24 @@ impl Error for UserNotFoundError{}
 
 #[async_trait]
 impl repository::UserRepository for PgUserRepository {
+    async fn create_user(&self, username: String, password: String) -> Result<User, Box<dyn Error>> {
+        let result = sqlx::query(
+            &*format!("INSERT INTO \"user\"(username, password) VALUES ($1, $2) RETURNING id;"),
+        )
+            .bind(&username)
+            .bind(&password)
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(User{
+            id: result.get("id"),
+            is_active: true,
+            username,
+            password,
+            premium_until: None,
+        })
+    }
+
     async fn find_user(&self, id: i64) -> Result<Option<User>, Box<dyn Error>> {
         let row = sqlx::query(
             "SELECT * FROM \"user\" WHERE id = $1",
@@ -45,7 +64,8 @@ impl repository::UserRepository for PgUserRepository {
             Ok(row) => {
                 let u = User {
                     id: row.get("id"),
-                    name: row.get("name"),
+                    username: row.get("username"),
+                    password: "".to_string(),
                     is_active: row.get("is_active"),
                     premium_until: row.get("premium_until"),
                 };

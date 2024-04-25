@@ -1,15 +1,18 @@
 #[macro_use] extern crate rocket;
-extern crate core;
 
 mod application;
 mod domain;
 mod infra;
+mod lab;
 
 use core::fmt;
 use std::any::Any;
 use std::env;
 use std::error::Error;
 use std::fmt::{Debug, Formatter};
+use std::rc::Rc;
+use std::sync::Arc;
+use rocket::http::Status;
 use rocket::State;
 use crate::infra::repository::PgTxRepository;
 use rocket::serde::json::Json;
@@ -28,11 +31,11 @@ struct Income {
 }
 
 #[post("/income", format = "json", data = "<data>")]
-async fn income(tx_repo: &State<Box<PgTxRepository>>, data: Json<Income>) -> String {
+async fn income(tx_repo: &State<Box<dyn TxRepository>>, data: Json<Income>) -> Status {
     let repo = tx_repo.inner();
-    match application::commands::income(repo.clone(), data.user_id, data.amount).await {
-        Ok(_) => "Ok".to_string(),
-        Err(err) => format!("{:?}", err)
+    match application::commands::income(repo, data.user_id, data.amount).await {
+        Ok(_) => Status::Ok,
+        Err(err) => Status::BadRequest,
     }
 }
 
@@ -44,14 +47,12 @@ struct Expense {
 }
 
 #[post("/prepare_expense", format = "json", data = "<data>")]
-async fn prepare_expense(tx_repo: &State<Box<PgTxRepository>>, data: Json<Expense>) -> &'static str {
+async fn prepare_expense(tx_repo: &State<Box<dyn TxRepository>>, data: Json<Expense>) -> Status {
     let repo = tx_repo.inner();
-    let res = application::commands::prepare_expense(repo.clone(), data.tx_id.clone(), data.user_id, data.amount).await;
-    if res.is_err() {
-        println!("err: {}", res.err().unwrap());
-        return "err"
+    match application::commands::prepare_expense(repo, data.tx_id.clone(), data.user_id, data.amount).await {
+        Ok(_) => Status::Ok,
+        Err(err) => Status::BadRequest,
     }
-    return "OK";
 }
 
 
@@ -61,88 +62,27 @@ struct CommitReq {
 }
 
 #[post("/commit_expense", format = "json", data = "<data>")]
-async fn commit_expense(tx_repo: &State<Box<PgTxRepository>>, data: Json<CommitReq>) -> &'static str {
+async fn commit_expense(tx_repo: &State<Box<dyn TxRepository>>, data: Json<CommitReq>) -> Status {
     let repo = tx_repo.inner();
-    let res = application::commands::commit_expense(repo.clone(), data.tx_id.clone()).await;
-    if res.is_err() {
-        println!("err: {}", res.err().unwrap());
-        return "err"
-    }
-    return "OK";
-}
-
-fn print_number<T: std::fmt::Display>(x: T) {
-    println!("{}", x);
-}
-
-fn print_number2(x: impl std::fmt::Display) {
-    println!("{}", x);
-}
-
-fn mapp<U, T>(f: impl FnOnce(T)) -> Option<U> {
-    return None
-}
-fn mappp<U, T, F>(f: F) -> Option<U> where F: FnOnce(T) -> U {
-    return None
-}
-
-#[derive(Debug)]
-struct ErrorOne;
-impl Error for ErrorOne{}
-impl fmt::Display for ErrorOne {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "error one")
+    match application::commands::commit_expense(repo, data.tx_id.clone()).await {
+        Ok(_) => Status::Ok,
+        Err(err) => Status::BadRequest,
     }
 }
 
-#[derive(Debug)]
-struct ErrorTwo;
-impl Error for ErrorTwo{}
-impl fmt::Display for ErrorTwo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "error two")
-    }
-}
 
-// fn return_error(input: u8) -> Result<String, impl Error> {
-//     match input {
-//         0 => Err(ErrorOne),
-//         1 => Err(ErrorTwo),
-//         _ => Ok("no error".to_string())
-//     }
-// }
-
-// pub fn notify<T: Debug>(item: &T) {
-//     println!("Breaking news! {}", item.summarize());
-// }
-
-#[launch]
-async fn rocket() -> _ {
-    let a = 5;
-    let b = 10.0;
-    print_number(a);
-    print_number(b);
-    print_number2(a);
-    print_number2(b);
-    // println!("error 1: {:?}", return_error(0));
-    // println!("error 1: {:?}", return_error(1));
-    // println!("error 1: {:?}", return_error(2));
-
-
-    println!("Hello, world!");
-    let pool = infra::db::pg().await;
-    let repo = PgTxRepository{
-        // conn: connection,
-        pool: pool//.clone()
-    };
-
-   //let d: Box<dyn TxRepository + Send> = Box::new(repo);
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
+    let mut pool = infra::db::pg().await;
+    let repo: Box<dyn TxRepository> = Box::new(PgTxRepository::new(pool.clone()));
+    //let d: Box<dyn TxRepository + Send> = Box::new(repo);
 
     //let res = application::commands::income(d, 1, 2).await;
     //application::commands::income(Box::new(repo), 1, 2);
 
     rocket::build()
-        .manage(Box::new(repo.clone()))
+        // .manage(Box::new(repo.clone()))
+        .manage(repo)
         //.manage(d)
         .mount("/", routes![
             index,
@@ -150,4 +90,6 @@ async fn rocket() -> _ {
             prepare_expense,
             commit_expense
         ])
+        .launch().await?;
+    Ok(())
 }

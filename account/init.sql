@@ -3,7 +3,8 @@ create table "user"
     id            serial
         constraint user_pk
             primary key,
-    name          varchar(255),
-    is_active     boolean,
+    username          varchar(255) unique,
+    password varchar(255) not null,
+    is_active     boolean not null default true,
     premium_until timestamp
 );

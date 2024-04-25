@@ -6,19 +6,16 @@ mod infra;
 mod domain;
 mod application;
 use std::env;
+use std::fmt::{Display};
 use std::net::{ToSocketAddrs};
+use std::ops::Add;
 
 use crate::infra::state::AppState;
+use rand::prelude::*;
+use crate::infra::auth::AuthManager;
 
-#[tokio::main]
+#[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    main2().await
-}
-
-//#[actix_web::main]
-async fn main2() -> std::io::Result<()> {
-    println!("Hello, world!");
-
     let pool = infra::db::pg().await;
 
     let port = env::var_os("HTTP_PORT")
@@ -28,6 +25,8 @@ async fn main2() -> std::io::Result<()> {
             .expect("invalid port"))
         .unwrap_or(8080);
 
+    println!("Starting server...");
+
     HttpServer::new(move || {
         let user_repo = PgUserRepository{
             // conn: connection,
@@ -35,16 +34,23 @@ async fn main2() -> std::io::Result<()> {
         };
 
         let billing = Box::new(InternalBillingService{
-            client: reqwest::ClientBuilder::new().build().expect("fail to create request client")
+            client: reqwest::ClientBuilder::new().build()
+                .expect("fail to create request client")
         });
 
-        let app_state = AppState::new(Box::new(user_repo), billing);
+        let auth_manager = AuthManager::new("secret".to_string());
+        let app_state = AppState::new(
+            Box::new(user_repo),
+            billing,
+        );
 
         App::new()
             .app_data(web::Data::new(app_state))
+            .app_data(web::Data::new(auth_manager))
             .service(infra::routes::get_account)
             .service(infra::routes::buypremium)
-            .route("/hey", web::get().to(infra::routes::manual_hello))
+            .service(infra::routes::register)
+            .service(infra::routes::me)
     })
     .bind(("127.0.0.1", port))?
     .run()
