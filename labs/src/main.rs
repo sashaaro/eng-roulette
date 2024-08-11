@@ -1,3 +1,6 @@
+mod main1;
+
+use std::collections::HashMap;
 use std::fmt::Display;
 
 fn main() {
@@ -16,8 +19,9 @@ fn foo<'a>(buffer: &'a String) {
     use_string(&parser);
     use_string(buffer);
 
-    use_string(parser);
-    use_string(buffer);
+    // use_string(parser);
+    // use_string(buffer);
+
     // let parser_ref = &parser;
     // take_parser(parser_ref);
     // take_parser(parser_ref);
@@ -30,10 +34,27 @@ fn foo<'a>(buffer: &'a String) {
     let max = StreamParser::max(&a, &b);
     println!("{}", max);
 
+    let max = Max{a: &a, b: &b};
+    println!("{}", max.max());
+
+    let max = StreamParser::maxMax(Max::new(&a,&b));
+    println!("{}", max);
+
     let a = StreamParser::new(&a);
     let b = StreamParser::new(&b);
     let max = StreamParser::max_buffer(&a, &b);
     println!("{}", max.buffer);
+
+
+    let a = "hello";
+    let b = &a;
+    // std::thread::spawn(move || {
+    //     println!("{}", b)
+    // })
+    // .join()
+    // .unwrap();
+
+    println!("{}", a);
 }
 
 fn use_offset(p0: &usize) {
@@ -49,9 +70,60 @@ fn take_parser(stream_parser: &StreamParser<'_>) {
 }
 
 #[derive(Debug)]
+struct Engine<'a, 'b> {
+    name: &'a String,
+    settings: &'b HashMap<String, String>
+}
+
+struct Person <'a> {
+    first_name: &'a Option<String>,
+    last_name: Option<&'a String>,
+}
+
+#[derive(Debug)]
 struct StreamParser<'a> {
     buffer: &'a String,
     offset: usize,
+    // engine: &'c Engine<'a, 'c>
+}
+
+
+struct Max<'a, T> {
+    a: &'a String,
+    b: T
+}
+
+impl<'a, T: Display> Max<'a, T> {
+}
+
+impl<'a, 'b> Max<'a, &'b String> {
+    fn new(a: &'a String, b: &'b String) -> Self {
+        Self {
+            a,
+            b
+        }
+    }
+
+    fn max(&self) -> &String {
+        if self.a.len() > self.a.len() {
+            self.a
+        } else {
+            self.b
+        }
+    }
+
+    fn get_a(&self) -> &String {
+        self.a
+    }
+
+    // fn get_max_a(&self, other: &Max) -> &Max {
+    //     //self
+    //     if self.a > other.a {
+    //         self
+    //     } else {
+    //         other
+    //     }
+    // }
 }
 
 impl Display for StreamParser<'_> {
@@ -61,10 +133,14 @@ impl Display for StreamParser<'_> {
 }
 
 impl<'a> StreamParser<'a> {
+    fn set_engine(&mut self, engine: Engine<'a, '_>) {
+        // self.engine = &engine;
+    }
     fn new(buffer: &'a String) -> Self {
         Self {
             buffer,
-            offset: 0
+            offset: 0,
+            // engine: &Engine { name: "test", settings: &HashMap::new() }
         }
     }
 
@@ -73,6 +149,14 @@ impl<'a> StreamParser<'a> {
             a
         } else {
             b
+        }
+    }
+
+    fn maxMax<'b>(m: Max<'b, &'b String>) -> &'b String {
+        if m.a.len() > m.b.len() {
+            m.a
+        } else {
+            m.b
         }
     }
 
