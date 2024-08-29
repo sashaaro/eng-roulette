@@ -7,15 +7,9 @@ use sqlx::{Executor, PgExecutor, PgPool, Pool, Postgres, Row};
 use sqlx::pool::MaybePoolConnection::PoolConnection;
 use crate::domain::models::{TxType};
 use crate::domain::repository::Tx2pcID;
-
-//#[derive(Clone)]
 pub struct PgTxRepository {
-    // pub conn: &'a mut PgConnection,
     pub pool: PgPool,
 }
-
-// unsafe impl Send for PgTxRepository {}
-// unsafe impl Sync for PgTxRepository {}
 
 impl PgTxRepository {
     pub fn new(pool: PgPool) -> Self {
@@ -104,6 +98,25 @@ impl repository::TxRepository for PgTxRepository {
             .execute(&self.pool)
             .await?;
 
+        Ok(())
+    }
+}
+
+pub struct PgJournalRepository {
+    pub pool: PgPool,
+}
+
+impl PgJournalRepository {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    pub async fn log(&self) -> Result<(), Box<dyn Error>> {
+        sqlx::query(
+            &*format!("SELECT 1 + 2;"),
+        )
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }
