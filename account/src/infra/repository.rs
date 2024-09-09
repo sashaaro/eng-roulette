@@ -79,7 +79,16 @@ impl repository::UserRepository for PgUserRepository {
             }
         }
     }
+}
 
+#[derive(Clone)]
+pub struct PgPremiumRepository {
+    // pub conn: &'a mut PgConnection,
+    pub pool: Pool<Postgres>,
+}
+
+#[async_trait]
+impl repository::PremiumRepository for PgPremiumRepository {
     async fn prepare_premium_until(&self, tx_id: Tx2pcID, user_id: i64, until: chrono::DateTime<Utc>) -> Result<(), Box<dyn Error>> {
         let mut tx = self.pool.begin().await?;
 

@@ -1,5 +1,5 @@
 use actix_web::{App, HttpServer, web};
-use crate::infra::repository::PgUserRepository;
+use crate::infra::repository::{PgPremiumRepository, PgUserRepository};
 use crate::infra::service::InternalBillingService;
 
 mod infra;
@@ -25,10 +25,15 @@ async fn main() -> std::io::Result<()> {
             .expect("invalid port"))
         .unwrap_or(8080);
 
-    println!("Starting server...");
+    println!("Start server on port {}", port);
 
     HttpServer::new(move || {
         let user_repo = PgUserRepository{
+            // conn: connection,
+            pool: pool.clone()
+        };
+
+        let premium_repo = PgPremiumRepository{
             // conn: connection,
             pool: pool.clone()
         };
@@ -41,6 +46,7 @@ async fn main() -> std::io::Result<()> {
         let auth_manager = AuthManager::new("secret".to_string());
         let app_state = AppState::new(
             Box::new(user_repo),
+            Box::new(premium_repo),
             billing,
         );
 

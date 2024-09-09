@@ -69,7 +69,7 @@ async fn me(
 async fn buypremium(
     app_state: web::Data<AppState>,
 ) -> impl Responder {
-    match buy_premium(&app_state.billing, &app_state.user_repo, 1).await {
+    match buy_premium(&app_state.billing, &app_state.user_repo, &app_state.premium_repo, 1).await {
         Ok(()) => HttpResponse::Ok().body("ok"),
         Err(err) => {
             HttpResponse::NotFound().body(format!("err: {:?}", err))
