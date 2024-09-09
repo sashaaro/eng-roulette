@@ -30,12 +30,12 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         let user_repo = PgUserRepository{
             // conn: connection,
-            pool: pool.clone()
+            pool: &pool
         };
 
         let premium_repo = PgPremiumRepository{
             // conn: connection,
-            pool: pool.clone()
+            pool: &pool
         };
 
         let billing = Box::new(InternalBillingService{

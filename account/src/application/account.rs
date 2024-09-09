@@ -30,7 +30,7 @@ pub async fn buy_premium<'a, T: BillingService+ 'a + ?Sized, A: UserRepository+ 
     Ok(())
 }
 
-pub async fn create_user<A: UserRepository+ 'static>(
+pub async fn create_user<A: UserRepository>(
     user_repo: &Box< A >,
     name: String,
     password: String,

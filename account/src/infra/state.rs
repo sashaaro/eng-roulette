@@ -6,20 +6,20 @@ use crate::domain::service::BillingService;
 use std::collections::HashMap;
 use crate::domain::repository::PremiumRepository;
 
-pub struct AppState {
+pub struct AppState<'a> {
     //pub room_repo: dyn RoomRepository,
-    pub user_repo: Box<PgUserRepository>,
-    pub premium_repo: Box<PgPremiumRepository>,
+    pub user_repo: Box<PgUserRepository<'a>>,
+    pub premium_repo: Box<PgPremiumRepository<'a>>,
     pub billing: Box<dyn BillingService>, // dyn BillingService
     map: HashMap<TypeId, Box<dyn Any>, RandomState>,
 }
 
-impl AppState {
+impl<'a> AppState<'a> {
     pub fn new(
-        user_repo: Box<PgUserRepository>,
-        premium_repo: Box<PgPremiumRepository>,
+        user_repo: Box<PgUserRepository<'a>>,
+        premium_repo: Box<PgPremiumRepository<'a>>,
         billing: Box<dyn BillingService>,
-    ) -> AppState {
+    ) -> AppState<'a> {
         AppState {
             user_repo,
             premium_repo,
