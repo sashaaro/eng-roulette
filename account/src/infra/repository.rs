@@ -13,14 +13,14 @@ use crate::domain::models::{User};
 use crate::domain::repository::Tx2pcID;
 
 #[derive(Clone)]
-pub struct PgUserRepository {
+pub struct PgUserRepository<'a> {
     // pub conn: &'a mut PgConnection,
-    pub pool: Pool<Postgres>,
+    pub pool: &'a Pool<Postgres>,
 }
 
-impl PgUserRepository {
+impl<'a> PgUserRepository<'a> {
     pub async fn sum(&self) -> i64 {
-        let row: (i64, ) = sqlx::query_as("SELECT $1 + 100").bind(150_i64).fetch_one(&self.pool).await.unwrap();
+        let row: (i64, ) = sqlx::query_as("SELECT $1 + 100").bind(150_i64).fetch_one(self.pool).await.unwrap();
         return row.0
     }
 }
@@ -37,14 +37,14 @@ impl fmt::Display for UserNotFoundError{
 impl Error for UserNotFoundError{}
 
 #[async_trait]
-impl repository::UserRepository for PgUserRepository {
+impl <'a>repository::UserRepository for PgUserRepository<'a> {
     async fn create_user(&self, username: String, password: String) -> Result<User, Box<dyn Error>> {
         let result = sqlx::query(
             &*format!("INSERT INTO \"user\"(username, password) VALUES ($1, $2) RETURNING id;"),
         )
             .bind(&username)
             .bind(&password)
-            .fetch_one(&self.pool)
+            .fetch_one(self.pool)
             .await?;
 
         Ok(User{
@@ -59,7 +59,7 @@ impl repository::UserRepository for PgUserRepository {
     async fn find_user(&self, id: i64) -> Result<Option<User>, Box<dyn Error>> {
         let row = sqlx::query(
             "SELECT * FROM \"user\" WHERE id = $1",
-        ).bind(id).fetch_one(&self.pool).await;
+        ).bind(id).fetch_one(self.pool).await;
         match row {
             Ok(row) => {
                 let u = User {
@@ -79,7 +79,16 @@ impl repository::UserRepository for PgUserRepository {
             }
         }
     }
+}
 
+#[derive(Clone)]
+pub struct PgPremiumRepository<'a> {
+    // pub conn: &'a mut PgConnection,
+    pub pool: &'a Pool<Postgres>,
+}
+
+#[async_trait]
+impl<'a> repository::PremiumRepository for PgPremiumRepository<'a> {
     async fn prepare_premium_until(&self, tx_id: Tx2pcID, user_id: i64, until: chrono::DateTime<Utc>) -> Result<(), Box<dyn Error>> {
         let mut tx = self.pool.begin().await?;
 
@@ -109,7 +118,7 @@ impl repository::UserRepository for PgUserRepository {
         sqlx::query(
             &*format!("COMMIT PREPARED 'acc_{}';", tx_id),
         )
-            .execute(&self.pool)
+            .execute(self.pool)
             .await?;
 
         Ok(())
@@ -119,7 +128,7 @@ impl repository::UserRepository for PgUserRepository {
         sqlx::query(
             &*format!("ROLLBACK PREPARED 'acc_{}';", tx_id),
         )
-            .execute(&self.pool)
+            .execute(self.pool)
             .await?;
 
         Ok(())

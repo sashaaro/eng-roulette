@@ -21,9 +21,9 @@ struct RegisterResp{
 const JWT_TTL: i64= 60;
 
 #[post("/register")]
-async fn register(
+async fn register<'a>(
     req_body: String,
-    app_state: web::Data<AppState>,
+    app_state: web::Data<AppState<'a>>,
     auth_manager: web::Data<AuthManager>
 ) -> impl Responder {
     let body = serde_json::from_str::<RegisterBody>(req_body.as_str());
@@ -66,10 +66,10 @@ async fn me(
 
 
 #[post("/buy_premium")]
-async fn buypremium(
-    app_state: web::Data<AppState>,
+async fn buypremium<'a>(
+    app_state: web::Data<AppState<'a>>,
 ) -> impl Responder {
-    match buy_premium(&app_state.billing, &app_state.user_repo, 1).await {
+    match buy_premium(&app_state.billing, &app_state.user_repo, &app_state.premium_repo, 1).await {
         Ok(()) => HttpResponse::Ok().body("ok"),
         Err(err) => {
             HttpResponse::NotFound().body(format!("err: {:?}", err))
@@ -79,8 +79,8 @@ async fn buypremium(
 }
 
 #[get("/account/{id}")]
-async fn get_account(
-    app_state: web::Data<AppState>,
+async fn get_account<'a>(
+    app_state: web::Data<AppState<'a>>,
     id: web::Path<i64>
 ) -> impl Responder {
     let num = app_state.user_repo.sum().await;
