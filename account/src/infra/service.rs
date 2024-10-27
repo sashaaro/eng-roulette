@@ -12,7 +12,7 @@ pub struct InternalBillingService {
 }
 
 #[derive(Deserialize, Serialize)]
-struct income {
+struct Income {
     user_id: i64,
     amount: i64,
     tx_id: Option<Tx2pcID>
@@ -20,7 +20,7 @@ struct income {
 #[async_trait]
 impl crate::domain::service::BillingService for InternalBillingService {
     async fn income(&self, user_id: i64, amount: i64) -> Result<(), Box<dyn Error>> {
-        let resp = self.client.post("http://localhost:8000/income").json(&income{
+        let resp = self.client.post("http://localhost:8000/income").json(&Income {
             user_id,
             amount,
             tx_id: None,
@@ -33,7 +33,7 @@ impl crate::domain::service::BillingService for InternalBillingService {
     }
 
     async fn prepare_expense(&self, tx_id: Tx2pcID, user_id: i64, amount: i64) -> Result<(), Box<dyn Error>> {
-        let resp = self.client.post("http://localhost:8081/prepare_expense").json(&income{
+        let resp = self.client.post("http://localhost:8081/prepare_expense").json(&Income {
             user_id,
             amount,
             tx_id: Some(tx_id),

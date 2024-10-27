@@ -13,13 +13,13 @@ pub async fn buy_premium<T: BillingService+ 'static + ?Sized, A: UserRepository+
     user_repo: &Box< A >,
     user_id: i64
 ) -> Result<(), Box<dyn Error>> {
-    let txID = Uuid::now_v6(NODE);
+    let tx_id = Uuid::now_v6(NODE);
     let until = Utc::now() + Duration::hours(2);
 
-    user_repo.prepare_premium_until(txID, user_id, until).await?;
-    billing.prepare_expense(txID, user_id, PREMIUM_COST).await?;
-    user_repo.commit_premium_until(txID).await?;
-    billing.commit_expense(txID).await
+    user_repo.prepare_premium_until(tx_id, user_id, until).await?;
+    billing.prepare_expense(tx_id, user_id, PREMIUM_COST).await?;
+    user_repo.commit_premium_until(tx_id).await?;
+    billing.commit_expense(tx_id).await
 }
 
 pub async fn create_user<A: UserRepository+ 'static>(

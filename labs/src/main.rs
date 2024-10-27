@@ -1,11 +1,13 @@
 mod main1;
+mod main2;
 
 use std::collections::HashMap;
 use std::fmt::Display;
 
 fn main() {
-    let buffer = String::from("hello");
-    foo(&buffer);
+    //let buffer = String::from("hello");
+    //foo(&buffer);
+    crate::main2::main2();
 }
 
 fn foo<'a>(buffer: &'a String) {

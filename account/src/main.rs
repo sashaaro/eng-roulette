@@ -5,6 +5,8 @@ use crate::infra::service::InternalBillingService;
 mod infra;
 mod domain;
 mod application;
+mod test;
+
 use std::env;
 use std::fmt::{Display};
 use std::net::{ToSocketAddrs};
@@ -28,10 +30,7 @@ async fn main() -> std::io::Result<()> {
     println!("Starting server...");
 
     HttpServer::new(move || {
-        let user_repo = PgUserRepository{
-            // conn: connection,
-            pool: pool.clone()
-        };
+        let user_repo = PgUserRepository::new(pool.clone());
 
         let billing = Box::new(InternalBillingService{
             client: reqwest::ClientBuilder::new().build()
