@@ -1,9 +1,9 @@
+use std::ops::Deref;
 use actix_web::{get, HttpRequest, HttpResponse, post, Responder, web};
 use jsonwebtoken;
 use crate::domain::repository::UserRepository;
-use crate::application::account::{buy_premium, create_user};
-use crate::infra::state::AppState;
 use serde::{Deserialize, Serialize};
+use crate::application::account::Application;
 use crate::infra::auth::{AuthManager, Claims};
 
 
@@ -21,9 +21,9 @@ struct RegisterResp{
 const JWT_TTL: i64= 60;
 
 #[post("/register")]
-async fn register<'a>(
+async fn register(
     req_body: String,
-    app_state: web::Data<AppState<'a>>,
+    app: web::Data<Application>,
     auth_manager: web::Data<AuthManager>
 ) -> impl Responder {
     let body = serde_json::from_str::<RegisterBody>(req_body.as_str());
@@ -32,7 +32,7 @@ async fn register<'a>(
     }
 
     let b = body.unwrap();
-    match create_user(&app_state.user_repo, b.name, b.password).await {
+    match app.create_user(b.name, b.password).await {
         Ok(user) => {
             let token = auth_manager.auth_header(Claims {
                 sub: user.id,
@@ -66,10 +66,10 @@ async fn me(
 
 
 #[post("/buy_premium")]
-async fn buypremium<'a>(
-    app_state: web::Data<AppState<'a>>,
+async fn buypremium(
+    app: web::Data<Application>,
 ) -> impl Responder {
-    match buy_premium(&app_state.billing, &app_state.user_repo, &app_state.premium_repo, 1).await {
+    match app.buy_premium(1).await {
         Ok(()) => HttpResponse::Ok().body("ok"),
         Err(err) => {
             HttpResponse::NotFound().body(format!("err: {:?}", err))
@@ -79,14 +79,11 @@ async fn buypremium<'a>(
 }
 
 #[get("/account/{id}")]
-async fn get_account<'a>(
-    app_state: web::Data<AppState<'a>>,
+async fn get_account(
+    user_repo: web::Data<dyn UserRepository>,
     id: web::Path<i64>
 ) -> impl Responder {
-    let num = app_state.user_repo.sum().await;
-    println!("row = {}", num);
-
-    let user = app_state.user_repo.find_user(id.into_inner()).await;
+    let user = user_repo.find_user(id.into_inner()).await;
 
     match user {
         Ok(None) => HttpResponse::NotFound().body("user not found"),

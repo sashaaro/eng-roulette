@@ -9,9 +9,10 @@ use std::env;
 use std::fmt::{Display};
 use std::net::{ToSocketAddrs};
 use std::ops::Add;
-
-use crate::infra::state::AppState;
+use std::sync::Arc;
+use actix_web::web::Data;
 use rand::prelude::*;
+use crate::application::account::Application;
 use crate::infra::auth::AuthManager;
 
 #[actix_web::main]
@@ -28,31 +29,33 @@ async fn main() -> std::io::Result<()> {
     println!("Start server on port {}", port);
 
     HttpServer::new(move || {
-        let user_repo = PgUserRepository{
+        let user_repo = Arc::new(PgUserRepository{
             // conn: connection,
-            pool: &pool
-        };
+            pool: pool.clone(),
+        });
 
-        let premium_repo = PgPremiumRepository{
+        let premium_repo = web::Data::new(PgPremiumRepository{
             // conn: connection,
-            pool: &pool
-        };
+            pool: pool.clone(),
+        });
 
-        let billing = Box::new(InternalBillingService{
+        let billing = web::Data::new(InternalBillingService{
             client: reqwest::ClientBuilder::new().build()
                 .expect("fail to create request client")
         });
 
-        let auth_manager = AuthManager::new("secret".to_string());
-        let app_state = AppState::new(
-            Box::new(user_repo),
-            Box::new(premium_repo),
-            billing,
-        );
+        let auth_manager = web::Data::new(AuthManager::new("secret".to_string()));
+        let ua = Arc::clone(&user_repo);
+        let pa = Arc::clone(&premium_repo);
+        let ba = Arc::clone(&billing);
+
+        let app = web::Data::new(Application::new(
+            ua,pa,ba,
+        ));
 
         App::new()
-            .app_data(web::Data::new(app_state))
-            .app_data(web::Data::new(auth_manager))
+            .app_data(auth_manager)
+            .app_data(app)
             .service(infra::routes::get_account)
             .service(infra::routes::buypremium)
             .service(infra::routes::register)
