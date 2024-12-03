@@ -5,6 +5,8 @@ use crate::infra::service::InternalBillingService;
 mod infra;
 mod domain;
 mod application;
+mod test;
+
 use std::env;
 use std::fmt::{Display};
 use std::net::{ToSocketAddrs};
@@ -29,10 +31,7 @@ async fn main() -> std::io::Result<()> {
     println!("Start server on port {}", port);
 
     HttpServer::new(move || {
-        let user_repo = Arc::new(PgUserRepository{
-            // conn: connection,
-            pool: pool.clone(),
-        });
+        let user_repo = Arc::new(PgUserRepository::new(pool.clone()));
 
         let premium_repo = web::Data::new(PgPremiumRepository{
             // conn: connection,

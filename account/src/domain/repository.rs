@@ -9,7 +9,7 @@ use crate::domain::models::*;
 pub type Tx2pcID = Uuid;
 
 #[async_trait]
-pub trait UserRepository {
+pub trait UserRepository: Send + Sync {
     async fn create_user(&self, name: String, password: String) -> Result<User, Box<dyn Error>>;
     async fn find_user(&self, id: i64) -> Result<Option<User>, Box<dyn Error>>;
 }

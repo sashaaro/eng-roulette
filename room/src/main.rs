@@ -1,47 +1,108 @@
-use std::fmt::{Debug, Display};
+use axum::{
+    routing::{get, post},
+    http::StatusCode,
+    Json, Router,
+};
+use serde::{Deserialize, Serialize};
 use clap::Parser;
-use tonic::transport::Server;
-use crate::server::helloworld::greeter_server;
-use crate::server::helloworld::{HelloRequest, HelloReply};
-use crate::greeter_server::GreeterServer;
+use tracing_subscriber::fmt::format;
 
-mod cli;
-mod r#box;
-mod r#server;
+/// Simple program to greet a person
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+pub struct Args {
+    /// Number of times to greet
+    #[arg(short, long, default_value_t = 8080)]
+    pub port: u16,
+}
 
-#[derive(Debug, Default)]
-pub struct MyGreeter {}
+fn app() -> Router {
+    let app = Router::new()
+        // `GET /` goes to `root`
+        .route("/", get(root))
+        // `POST /users` goes to `create_user`
+        .route("/users", post(create_user));
 
-#[tonic::async_trait]
-impl greeter_server::Greeter for MyGreeter {
-    async fn say_hello(
-        &self,
-        request: tonic::Request<HelloRequest>, // Accept request of type HelloRequest
-    ) -> Result<tonic::Response<HelloReply>, tonic::Status> { // Return an instance of type HelloReply
-        println!("Got a request: {:?}", request);
-
-        let reply = HelloReply {
-            message: format!("Hello {}!", request.into_inner().name), // We must use .into_inner() as the fields of gRPC requests and responses are private
-        };
-
-        Ok(tonic::Response::new(reply)) // Send back our formatted greeting
-    }
+    app
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = "[::1]:50051".parse()?;
-    let greeter = MyGreeter::default();
-
-    println!("Room service starting..");
-    
+async fn main() {
+    // initialize tracing
+    tracing_subscriber::fmt::init();
 
 
-    Server::builder()
-        .add_service(GreeterServer::new(greeter))
-        .serve(addr)
-        .await?;
+    let args = Args::parse();
 
-    Ok(())
+    // build our application with a route
+
+
+    // run our app with hyper, listening globally on port 3000
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await.unwrap();
+    axum::serve(listener, app()).await.unwrap();
 }
 
+// basic handler that responds with a static string
+async fn root() -> &'static str {
+    "Hello, World!"
+}
+
+async fn create_user(
+    // this argument tells axum to parse the request body
+    // as JSON into a `CreateUser` type
+    Json(payload): Json<CreateUser>,
+) -> (StatusCode, Json<User>) {
+    // insert your application logic here
+    let user = User {
+        id: 1337,
+        username: payload.username,
+    };
+
+    // this will be converted into a JSON response
+    // with a status code of `201 Created`
+    (StatusCode::CREATED, Json(user))
+}
+
+// the input to our `create_user` handler
+#[derive(Deserialize)]
+struct CreateUser {
+    username: String,
+}
+
+// the output to our `create_user` handler
+#[derive(Serialize)]
+struct User {
+    id: u64,
+    username: String,
+}
+
+
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        extract::connect_info::MockConnectInfo,
+        http::{self, Request, StatusCode},
+    };
+    use serde_json::{json, Value};
+    use tokio::net::TcpListener;
+    use tower::{Service, ServiceExt}; // for `call`, `oneshot`, and `ready`
+
+    #[tokio::test]
+    async fn hello_world() {
+        let app = app();
+
+        // `Router` implements `tower::Service<Request<Body>>` so we can
+        // call it like any tower service, no need to run an HTTP server.
+        let response = app
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+}
