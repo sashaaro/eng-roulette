@@ -12,10 +12,11 @@ use std::fmt::{Display};
 use std::net::{ToSocketAddrs};
 use std::ops::Add;
 use std::sync::Arc;
-use actix_web::web::Data;
 use rand::prelude::*;
 use crate::application::account::Application;
 use crate::infra::auth::AuthManager;
+use sqlx::{Pool, Postgres};
+use actix_web::web::{Data, ServiceConfig};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -31,36 +32,41 @@ async fn main() -> std::io::Result<()> {
     println!("Start server on port {}", port);
 
     HttpServer::new(move || {
-        let user_repo = Arc::new(PgUserRepository::new(pool.clone()));
+        App::new().configure(config_app(pool.clone()))
+    })
+    .bind(("127.0.0.1", port))?
+    .run()
+    .await
+}
 
-        let premium_repo = web::Data::new(PgPremiumRepository{
-            // conn: connection,
-            pool: pool.clone(),
-        });
+fn config_app(pool: Pool<Postgres>) -> Box<dyn Fn(&mut ServiceConfig)> {
+    let user_repo = Arc::new(PgUserRepository::new(pool.clone()));
 
-        let billing = web::Data::new(InternalBillingService{
-            client: reqwest::ClientBuilder::new().build()
-                .expect("fail to create request client")
-        });
+    let premium_repo = web::Data::new(PgPremiumRepository {
+        // conn: connection,
+        pool: pool.clone(),
+    });
 
+    let billing = web::Data::new(InternalBillingService {
+        client: reqwest::ClientBuilder::new().build()
+            .expect("fail to create request client")
+    });
+
+    Box::new(move |cfg: &mut ServiceConfig| {
         let auth_manager = web::Data::new(AuthManager::new("secret".to_string()));
         let ua = Arc::clone(&user_repo);
         let pa = Arc::clone(&premium_repo);
         let ba = Arc::clone(&billing);
 
         let app = web::Data::new(Application::new(
-            ua,pa,ba,
+            ua, pa, ba,
         ));
 
-        App::new()
-            .app_data(auth_manager)
+        cfg.app_data(auth_manager)
             .app_data(app)
             .service(infra::routes::get_account)
             .service(infra::routes::buypremium)
             .service(infra::routes::register)
-            .service(infra::routes::me)
+            .service(infra::routes::me);
     })
-    .bind(("127.0.0.1", port))?
-    .run()
-    .await
 }
