@@ -1,3 +1,5 @@
+mod tetris;
+
 use axum::{
     routing::{get, post},
     http::StatusCode,
@@ -6,6 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use clap::Parser;
 use tracing_subscriber::fmt::format;
+use crate::tetris::create_tetris;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -34,6 +37,7 @@ async fn main() {
 
     let args = Args::parse();
 
+    create_tetris().await;
     // build our application with a route
 
 
