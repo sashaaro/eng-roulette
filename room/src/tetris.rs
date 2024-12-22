@@ -2,11 +2,12 @@ use core::error::Error;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::fs::Permissions;
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
-use serde::de::Unexpected::Option;
 use tracing_subscriber::fmt;
+use std::option::Option;
 
 pub async fn create_tetris() {
     let counter = Arc::new(Mutex::new(0));
@@ -21,64 +22,119 @@ pub async fn create_tetris() {
     });
 
 
-    let blocks = Arc::new(Mutex::new(Vec::new()));
-    let b1 = blocks.clone();
+    let blocks: Arc<Mutex<Vec<Element>>> = Arc::new(Mutex::new(Vec::new()));
+    let mut current_block: Arc<Mutex<Option<Element>>> = Arc::new(Mutex::new(None));
 
     tokio::spawn(async move {
         loop {
-            sleep(Duration::from_millis(3000));
-            let mut cube = create_cube();
-            put_block(&mut cube, Coordinate(8, 1, Arc::new(String::new())));
+            sleep(Duration::from_millis(1000));
 
-            b1.lock().unwrap().push(cube);
+            //current_block
+        }
+    });
+
+    let cur_block = Arc::clone(&current_block);
+    tokio::spawn(async move {
+        sleep(Duration::from_millis(1000));
+        let mut cb = cur_block.lock().unwrap();
+
+        let mut new_element = create_cube();
+
+        put_block(&mut new_element, Coordinate(8, 2, Arc::new(String::new())));
+        *cb = Some(new_element);
+    });
+
+    let cur_block = Arc::clone(&current_block);
+    tokio::spawn(async move {
+        loop {
+            sleep(Duration::from_millis(1000));
+
+
+            let mut c = cur_block.lock().unwrap();
+            if c.is_some() {
+                fail_down(&mut c.as_mut().unwrap());
+            }
         }
     });
 
     let c2 = counter.clone();
-    let b2 = blocks.clone();
+    let blocks2 = Arc::clone(&blocks.clone());
 
-    loop {
-        sleep(Duration::from_millis(500));
+    let cur_block = Arc::clone(&current_block);
 
+
+    let walls: Vec<Element> = vec!(
+        draw_line((1, 1), (1, 16)).unwrap(),
+        draw_line((2, 1), (16, 1)).unwrap(),
+        draw_line((16, 1), (16, 16)).unwrap(),
+        draw_line((2, 16), (16, 16)).unwrap()
+    );
+
+
+    let build_coordinates = || -> Vec<Coordinate> {
         let mut coordinates: Vec<Coordinate> = Vec::new();
-        coordinates.append(&mut draw_line((1, 1), (1, 16)).unwrap());
-        coordinates.append(&mut draw_line((2, 1), (16, 1)).unwrap());
+        walls.clone().into_iter().for_each(|x| {
+            coordinates.extend_from_slice(x.block.as_slice());
+        });
 
-        coordinates.append(&mut draw_line((16, 1), (16, 16)).unwrap());
-        coordinates.append(&mut draw_line((2, 16), (16, 16)).unwrap());
+        coordinates.push(Coordinate(3,3, Arc::new(c2.lock().unwrap().to_string() + " ")));
+        let mut c = cur_block.lock().unwrap();
 
-
-        coordinates.push(Coordinate(4,4, Arc::new(c2.lock().unwrap().to_string() + " ")));
-
-        for block in b2.lock().unwrap().iter().clone() {
-            for x in block.iter() {
+        if c.is_some() {
+            for x in c.as_ref().unwrap().block.iter() {
                 coordinates.push(x.clone());
             }
         }
 
-        let render = Render::new();
-        render.render(&coordinates);
+        for block in blocks2.lock().unwrap().iter() {
+            for x in block.block.iter() {
+                coordinates.push(x.clone());
+            }
+        }
 
-        // println!("|");
-        // println!("| {}!", c2.lock().unwrap());
-        // println!("|");
-        // println!("_____________");
+        coordinates
+    };
+    let render = Render::new();
+
+
+    loop {
+        sleep(Duration::from_millis(500));
+        render.render(&build_coordinates());
     }
 
 }
 
-fn create_cube() -> Vec<Coordinate> {
-    vec![Coordinate(1, 1, Arc::new("++")), Coordinate(1, 2, Arc::new("++")), Coordinate(1, 3, Arc::new("++")), Coordinate(1, 4, Arc::new("++"))]
+fn fail_down(block: &mut Element) {
+    for x in block.block.iter_mut() {
+        x.1 += 1;
+    }
+}
+
+fn create_cube() -> Element {
+    Element::new(vec![Coordinate(1, 1, Arc::new("++")), Coordinate(1, 2, Arc::new("++")), Coordinate(2, 1, Arc::new("++")), Coordinate(2, 2, Arc::new("++"))])
 }
 
 fn spawn_block() {
 
 }
 
-fn put_block(block: &mut Vec<Coordinate>, start :Coordinate) {
-    for p in block {
+fn put_block(block: &mut Element, start :Coordinate) {
+    for p in block.block.iter_mut() {
         p.0 += start.0 - 1;
         p.1 += start.1 - 1;
+    }
+}
+
+#[derive(Clone)]
+struct Element {
+    block: Vec<Coordinate>
+}
+
+impl Element {
+    fn new(block: Vec<Coordinate>) -> Element {
+        Element {
+            block
+        }
     }
 }
 
@@ -104,16 +160,18 @@ impl Error for MyError<'_> {
 
 
 
-fn draw_line(start: (i32, i32), end: (i32, i32)) -> Result<(Vec<Coordinate>), Box<dyn Error>> {
+fn draw_line(start: (i32, i32), end: (i32, i32)) -> Result<(Element), Box<dyn Error>> {
     if start.0 != end.0 && start.1 != end.1 {
         return Err(Box::new(MyError{msg : "Only horizontal and vertical lines are supported"}));
     }
 
+    let r;
     if start.0 == end.0 {
-        draw_vertical_line(start.0, start.1, end.1)
+        r = draw_vertical_line(start.0, start.1, end.1)
     } else {
-        draw_horizontal_line(start.1, start.0, end.0)
+        r = draw_horizontal_line(start.1, start.0, end.0)
     }
+    r.map(|r| -> Element { Element::new(r) })
 }
 
 fn draw_vertical_line(start_x: i32, start_y: i32, end_y: i32) -> Result<Vec<Coordinate>, Box<dyn Error>> {
@@ -151,7 +209,6 @@ fn draw_horizontal_line(start_x: i32, start_y: i32, end_y: i32) -> Result<Vec<Co
 // 3 |
 
 struct Render {
-
 }
 
 
@@ -166,27 +223,26 @@ impl Render {
         Self {}
     }
 
-    pub fn render(&self, coordinates: &Vec<Coordinate>) {
-        self.clear();
-        let mut coordinatesMap : HashMap<i32, Vec<&Coordinate>> = HashMap::new();
+    pub fn render_coordinates(&self, coordinates: &Vec<Coordinate>) {
+        let mut coordinates_map: HashMap<i32, Vec<&Coordinate>> = HashMap::new();
 
         for c in coordinates {
-            let mut v = coordinatesMap.get_mut(&c.1);
+            let mut v = coordinates_map.get_mut(&c.1);
             if v.is_some() {
                 v.unwrap().push(c);
             } else {
                 let mut vv: Vec<&Coordinate> = Vec::new();
                 vv.push(c);
-                coordinatesMap.insert(c.1, vv);
+                coordinates_map.insert(c.1, vv);
             }
         }
 
         for y in 1..=16 {
             for x in 1..=16 {
-                if coordinatesMap.get(&y).is_some() {
+                if coordinates_map.get(&y).is_some() {
 
                     let mut res = None;
-                    for c in coordinatesMap.get(&y).unwrap().iter() {
+                    for c in coordinates_map.get(&y).unwrap().iter() {
                         if c.0 == x {
                             res = Some(c);
                             break;
@@ -204,6 +260,10 @@ impl Render {
             }
             println!("");
         }
+    }
+    pub fn render(&self, vec1: &Vec<Coordinate>) {
+        self.render_coordinates(vec1);
+        self.clear();
     }
 
     fn clear(&self) {
