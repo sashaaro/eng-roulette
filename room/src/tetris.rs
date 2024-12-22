@@ -8,6 +8,8 @@ use std::thread::sleep;
 use std::time::Duration;
 use tracing_subscriber::fmt;
 use std::option::Option;
+use tokio::io;
+use tokio::io::{AsyncReadExt, Stdin};
 
 pub async fn create_tetris() {
     let counter = Arc::new(Mutex::new(0));
@@ -70,6 +72,19 @@ pub async fn create_tetris() {
         draw_line((2, 16), (16, 16)).unwrap()
     );
 
+    tokio::spawn(async move {
+        let mut stdin = io::stdin();
+        loop {
+            let mut buffer = [0;1];
+            stdin.read_exact(&mut buffer).await.unwrap();
+
+            if buffer[0] == 27 {
+                break;
+            }
+            println!("You have hit: {:?}", buffer[0]);
+
+        }
+    });
 
     let build_coordinates = || -> Vec<Coordinate> {
         let mut coordinates: Vec<Coordinate> = Vec::new();
@@ -94,14 +109,13 @@ pub async fn create_tetris() {
 
         coordinates
     };
+
+
     let render = Render::new();
-
-
     loop {
         sleep(Duration::from_millis(500));
         render.render(&build_coordinates());
     }
-
 }
 
 fn fail_down(block: &mut Element) {
