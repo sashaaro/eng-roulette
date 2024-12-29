@@ -36,7 +36,7 @@ pub async fn create_tetris() {
         }
     });
 
-    let cur_block = Arc::clone(&current_block);
+    let mut cur_block = Arc::clone(&current_block);
     tokio::spawn(async move {
         sleep(Duration::from_millis(1000));
         let mut cb = cur_block.lock().unwrap();
@@ -106,15 +106,17 @@ pub async fn create_tetris() {
         }
 
         for block in blocks2.lock().unwrap().iter_mut() {
-            if block.next_movement.is_some() {
-                match block.next_movement {
-                    Some(Down) => {
-                        fail_down(block);
-                    },
-                    _ => {}
+            match block.next_movement {
+                Some(Down) => {
+                    fail_down(block);
+                },
+                _ => {
+
+
                 }
-                block.next_movement = None;
             }
+            block.next_movement = None;
+
             for x in block.block.iter() {
                 coordinates.push(x.clone());
             }
@@ -255,8 +257,8 @@ struct Coordinate (i32, i32, Arc<dyn Display + Send + Sync>); // x, y
 const WALL: &str = "++";
 
 
-fn coordinates_to_hashmap(coordinates: &Vec<Coordinate>) -> HashMap<i32, Coordinate> {
-    let mut hashmap = HashMap::new();
+fn coordinates_to_hashmap(coordinates: &Vec<Coordinate>) -> HashMap<i32, Vec<&Coordinate>> { // y => x
+    let mut hashmap : HashMap<i32, Vec<&Coordinate>> = HashMap::new();
     for c in coordinates {
         let mut v = hashmap.get_mut(&c.1);
         if v.is_some() {
