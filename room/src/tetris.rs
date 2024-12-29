@@ -97,25 +97,52 @@ pub async fn create_tetris() {
         });
 
         coordinates.push(Coordinate(3,3, Arc::new(c2.lock().unwrap().to_string() + " ")));
+
         let mut c = cur_block.lock().unwrap();
 
+        let core_map = coordinates_to_hashmap(&coordinates);
+
         if c.is_some() {
+            let mut block = c.as_mut().unwrap();
+            match block.next_movement {
+                Some(Down) => {
+                    let moved_block = fail_down(block.clone());
+                    let mut lets_move = true;
+                    for c in moved_block.iter() {
+                        let v = core_map.get(&c.0);
+                        if v.is_some() {
+                            if v.unwrap().iter().map(|x| x.1).filter(|x| *x == c.1).count() > 0 {
+                                lets_move = false;
+                                break
+                            }
+                        }
+                    }
+                    if lets_move {
+                        block.block = moved_block;
+                    }
+
+                },
+                _ => {
+
+                }
+            }
+            block.next_movement = None;
             for x in c.as_ref().unwrap().block.iter() {
                 coordinates.push(x.clone());
             }
         }
 
-        for block in blocks2.lock().unwrap().iter_mut() {
-            match block.next_movement {
-                Some(Down) => {
-                    fail_down(block);
-                },
-                _ => {
-
-
-                }
-            }
-            block.next_movement = None;
+        for block in blocks2.lock().unwrap().iter() {
+            // match block.next_movement {
+            //     Some(Down) => {
+            //         fail_down(block.clone());
+            //     },
+            //     _ => {
+            //
+            //
+            //     }
+            // }
+            // block.next_movement = None;
 
             for x in block.block.iter() {
                 coordinates.push(x.clone());
@@ -133,10 +160,12 @@ pub async fn create_tetris() {
     }
 }
 
-fn fail_down(block: &mut Element) {
-    for x in block.block.iter_mut() {
-        x.1 += 1;
+fn fail_down(block: Element) -> Vec<Coordinate> {
+    let mut res = Vec::new();
+    for x in block.block.iter() {
+        res.push(Coordinate(x.0, x.1 + 1, Arc::new(WALL)));
     }
+    res
 }
 
 fn create_cube() -> Element {
