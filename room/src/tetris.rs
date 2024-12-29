@@ -10,6 +10,7 @@ use tracing_subscriber::fmt;
 use std::option::Option;
 use tokio::io;
 use tokio::io::{AsyncReadExt, Stdin};
+use crate::tetris::Movement::Down;
 
 pub async fn create_tetris() {
     let counter = Arc::new(Mutex::new(0));
@@ -54,7 +55,10 @@ pub async fn create_tetris() {
 
             let mut c = cur_block.lock().unwrap();
             if c.is_some() {
-                fail_down(&mut c.as_mut().unwrap());
+                let cc = &mut c.as_mut().unwrap();
+                cc.next_movement = Some(Down);
+
+                // fail_down(cc);
             }
         }
     });
@@ -101,7 +105,16 @@ pub async fn create_tetris() {
             }
         }
 
-        for block in blocks2.lock().unwrap().iter() {
+        for block in blocks2.lock().unwrap().iter_mut() {
+            if block.next_movement.is_some() {
+                match block.next_movement {
+                    Some(Down) => {
+                        fail_down(block);
+                    },
+                    _ => {}
+                }
+                block.next_movement = None;
+            }
             for x in block.block.iter() {
                 coordinates.push(x.clone());
             }
@@ -140,14 +153,24 @@ fn put_block(block: &mut Element, start :Coordinate) {
 }
 
 #[derive(Clone)]
+enum Movement {
+    Up = 0,
+    Right = 1,
+    Down = 2,
+    Left = 3,
+}
+
+#[derive(Clone)]
 struct Element {
-    block: Vec<Coordinate>
+    block: Vec<Coordinate>,
+    next_movement: Option<Movement>,
 }
 
 impl Element {
     fn new(block: Vec<Coordinate>) -> Element {
         Element {
-            block
+            block,
+            next_movement: None,
         }
     }
 }
@@ -227,9 +250,26 @@ struct Render {
 
 
 #[derive(Clone)]
-struct Coordinate (i32, i32, Arc<dyn Display + Send + Sync>);
+struct Coordinate (i32, i32, Arc<dyn Display + Send + Sync>); // x, y
 
 const WALL: &str = "++";
+
+
+fn coordinates_to_hashmap(coordinates: &Vec<Coordinate>) -> HashMap<i32, Coordinate> {
+    let mut hashmap = HashMap::new();
+    for c in coordinates {
+        let mut v = hashmap.get_mut(&c.1);
+        if v.is_some() {
+            v.unwrap().push(c);
+        } else {
+            let mut vv: Vec<&Coordinate> = Vec::new();
+            vv.push(c);
+            hashmap.insert(c.1, vv);
+        }
+    }
+
+    hashmap
+}
 
 impl Render {
 
@@ -238,18 +278,7 @@ impl Render {
     }
 
     pub fn render_coordinates(&self, coordinates: &Vec<Coordinate>) {
-        let mut coordinates_map: HashMap<i32, Vec<&Coordinate>> = HashMap::new();
-
-        for c in coordinates {
-            let mut v = coordinates_map.get_mut(&c.1);
-            if v.is_some() {
-                v.unwrap().push(c);
-            } else {
-                let mut vv: Vec<&Coordinate> = Vec::new();
-                vv.push(c);
-                coordinates_map.insert(c.1, vv);
-            }
-        }
+        let mut coordinates_map = coordinates_to_hashmap(coordinates);
 
         for y in 1..=16 {
             for x in 1..=16 {
