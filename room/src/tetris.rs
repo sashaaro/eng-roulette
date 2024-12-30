@@ -43,7 +43,7 @@ pub async fn create_tetris() {
 
         let mut new_element = create_cube();
 
-        put_block(&mut new_element, Coordinate(8, 2, Arc::new(String::new())));
+        put_block(&mut new_element, Coordinate{x: 8, y: 2, b: Arc::new(String::new())});
         *cb = Some(new_element);
     });
 
@@ -96,7 +96,7 @@ pub async fn create_tetris() {
             coordinates.extend_from_slice(x.block.as_slice());
         });
 
-        coordinates.push(Coordinate(3,3, Arc::new(c2.lock().unwrap().to_string() + " ")));
+        coordinates.push(Coordinate{x: 3, y: 3, b: Arc::new(c2.lock().unwrap().to_string() + " ")});
 
         let mut c = cur_block.lock().unwrap();
 
@@ -109,9 +109,9 @@ pub async fn create_tetris() {
                     let moved_block = fail_down(block.clone());
                     let mut lets_move = true;
                     for c in moved_block.iter() {
-                        let v = core_map.get(&c.0);
+                        let v = core_map.get(&c.y);
                         if v.is_some() {
-                            if v.unwrap().iter().map(|x| x.1).filter(|x| *x == c.1).count() > 0 {
+                            if v.unwrap().iter().map(|x| x.x).filter(|x| *x == c.x).count() > 0 {
                                 lets_move = false;
                                 break
                             }
@@ -163,13 +163,18 @@ pub async fn create_tetris() {
 fn fail_down(block: Element) -> Vec<Coordinate> {
     let mut res = Vec::new();
     for x in block.block.iter() {
-        res.push(Coordinate(x.0, x.1 + 1, Arc::new(WALL)));
+        res.push(Coordinate{x: x.x, y: x.y + 1, b: Arc::new(WALL)});
     }
     res
 }
 
 fn create_cube() -> Element {
-    Element::new(vec![Coordinate(1, 1, Arc::new("++")), Coordinate(1, 2, Arc::new("++")), Coordinate(2, 1, Arc::new("++")), Coordinate(2, 2, Arc::new("++"))])
+    Element::new(vec![
+        Coordinate{x: 1, y: 1, b: Arc::new("++")},
+        Coordinate{x: 1, y: 2, b: Arc::new("++")},
+        Coordinate{x: 2, y: 1, b: Arc::new("++")},
+        Coordinate{x: 2, y: 2, b: Arc::new("++")},
+    ])
 }
 
 fn spawn_block() {
@@ -178,8 +183,8 @@ fn spawn_block() {
 
 fn put_block(block: &mut Element, start :Coordinate) {
     for p in block.block.iter_mut() {
-        p.0 += start.0 - 1;
-        p.1 += start.1 - 1;
+        p.x += start.x - 1;
+        p.y += start.y - 1;
     }
 }
 
@@ -246,11 +251,11 @@ fn draw_vertical_line(start_x: i32, start_y: i32, end_y: i32) -> Result<Vec<Coor
     let mut res = Vec::new();
     if start_y < end_y {
         for n in start_y..=end_y {
-            res.push(Coordinate(start_x, n, Arc::new(WALL)))
+            res.push(Coordinate{x: start_x, y: n, b: Arc::new(WALL)})
         }
     } else {
         for n in end_y..=start_x {
-            res.push(Coordinate(start_x, n, Arc::new(WALL)))
+            res.push(Coordinate{x: start_x, y: n, b: Arc::new(WALL)})
         }
     }
 
@@ -261,11 +266,11 @@ fn draw_horizontal_line(start_x: i32, start_y: i32, end_y: i32) -> Result<Vec<Co
     let mut res = Vec::new();
     if start_y < end_y {
         for n in start_y..=end_y {
-            res.push(Coordinate(n, start_x, Arc::new(WALL)))
+            res.push(Coordinate{x: n, y: start_x, b: Arc::new(WALL)})
         }
     } else {
         for n in end_y..=start_x {
-            res.push(Coordinate(n, start_x, Arc::new(WALL)))
+            res.push(Coordinate{x: n, y: start_x, b: Arc::new(WALL)})
         }
     }
 
@@ -281,7 +286,11 @@ struct Render {
 
 
 #[derive(Clone)]
-struct Coordinate (i32, i32, Arc<dyn Display + Send + Sync>); // x, y
+struct Coordinate {
+    x: i32,
+    y: i32,
+    b: Arc<dyn Display + Send + Sync>
+}
 
 const WALL: &str = "++";
 
@@ -289,13 +298,13 @@ const WALL: &str = "++";
 fn coordinates_to_hashmap(coordinates: &Vec<Coordinate>) -> HashMap<i32, Vec<&Coordinate>> { // y => x
     let mut hashmap : HashMap<i32, Vec<&Coordinate>> = HashMap::new();
     for c in coordinates {
-        let mut v = hashmap.get_mut(&c.1);
+        let mut v = hashmap.get_mut(&c.y);
         if v.is_some() {
             v.unwrap().push(c);
         } else {
             let mut vv: Vec<&Coordinate> = Vec::new();
             vv.push(c);
-            hashmap.insert(c.1, vv);
+            hashmap.insert(c.y, vv);
         }
     }
 
@@ -317,14 +326,14 @@ impl Render {
 
                     let mut res = None;
                     for c in coordinates_map.get(&y).unwrap().iter() {
-                        if c.0 == x {
+                        if c.x == x {
                             res = Some(c);
                             break;
                         }
                     }
 
                     if res.is_some() {
-                        print!("{}", res.unwrap().2);
+                        print!("{}", res.unwrap().b);
                     } else {
                         print!("  ");
                     }
