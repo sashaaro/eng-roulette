@@ -4,12 +4,13 @@ use std::fmt::{Debug, Display, Formatter, Write};
 use std::fs::Permissions;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
-use std::thread::sleep;
+use tokio::time::sleep;
 use std::time::Duration;
 use tracing_subscriber::fmt;
 use std::option::Option;
 use tokio::io;
 use tokio::io::{AsyncReadExt, Stdin};
+use tokio::sync::mpsc::{channel, Sender};
 use crate::tetris::Movement::Down;
 
 pub async fn create_tetris() {
@@ -19,7 +20,7 @@ pub async fn create_tetris() {
     let c = counter.clone();
     tokio::spawn(async move {
         loop {
-            sleep(Duration::from_millis(2000));
+            sleep(Duration::from_millis(2000)).await;
             *c.lock().unwrap() += 1;
         }
     });
@@ -30,27 +31,39 @@ pub async fn create_tetris() {
 
     tokio::spawn(async move {
         loop {
-            sleep(Duration::from_millis(1000));
+            sleep(Duration::from_millis(1000)).await;
 
             //current_block
         }
     });
 
+    let (next_block_sender, mut next_block_receiver) = channel(3);
+
+    let next_block_sx =  next_block_sender.clone();
+    tokio::spawn(async move {
+        sleep(Duration::from_millis(1000)).await;
+        let new_element = create_cube();
+        next_block_sx.send(new_element).await.expect("TODO: panic message");
+    });
+
     let mut cur_block = Arc::clone(&current_block);
     tokio::spawn(async move {
-        sleep(Duration::from_millis(1000));
-        let mut cb = cur_block.lock().unwrap();
+        loop {
+            let mut new_element = next_block_receiver.recv().await;
+            if new_element.is_none() {
+                break;
+            }
+            let mut new_element = new_element.unwrap();
 
-        let mut new_element = create_cube();
-
-        put_block(&mut new_element, Coordinate{x: 8, y: 2, b: Arc::new(String::new())});
-        *cb = Some(new_element);
+            put_block(&mut new_element, Coordinate { x: 8, y: 2, b: Arc::new(String::new()) });
+            *cur_block.lock().unwrap() = Some(new_element);
+        }
     });
 
     let cur_block = Arc::clone(&current_block);
     tokio::spawn(async move {
         loop {
-            sleep(Duration::from_millis(1000));
+            sleep(Duration::from_millis(1000)).await;
 
 
             let mut c = cur_block.lock().unwrap();
@@ -65,9 +78,6 @@ pub async fn create_tetris() {
 
     let c2 = counter.clone();
     let blocks2 = Arc::clone(&blocks.clone());
-
-    let cur_block = Arc::clone(&current_block);
-
 
     let walls: Vec<Element> = vec!(
         draw_line((1, 1), (1, 16)).unwrap(),
@@ -90,73 +100,15 @@ pub async fn create_tetris() {
         }
     });
 
-    let build_coordinates = || -> Vec<Coordinate> {
-        let mut coordinates: Vec<Coordinate> = Vec::new();
-        walls.clone().into_iter().for_each(|x| {
-            coordinates.extend_from_slice(x.block.as_slice());
-        });
-
-        coordinates.push(Coordinate{x: 3, y: 3, b: Arc::new(c2.lock().unwrap().to_string() + " ")});
-
-        let mut c = cur_block.lock().unwrap();
-
-        let core_map = coordinates_to_hashmap(&coordinates);
-
-        if c.is_some() {
-            let mut block = c.as_mut().unwrap();
-            match block.next_movement {
-                Some(Down) => {
-                    let moved_block = fail_down(block.clone());
-                    let mut lets_move = true;
-                    for c in moved_block.iter() {
-                        let v = core_map.get(&c.y);
-                        if v.is_some() {
-                            if v.unwrap().iter().map(|x| x.x).filter(|x| *x == c.x).count() > 0 {
-                                lets_move = false;
-                                break
-                            }
-                        }
-                    }
-                    if lets_move {
-                        block.block = moved_block;
-                    }
-
-                },
-                _ => {
-
-                }
-            }
-            block.next_movement = None;
-            for x in c.as_ref().unwrap().block.iter() {
-                coordinates.push(x.clone());
-            }
-        }
-
-        for block in blocks2.lock().unwrap().iter() {
-            // match block.next_movement {
-            //     Some(Down) => {
-            //         fail_down(block.clone());
-            //     },
-            //     _ => {
-            //
-            //
-            //     }
-            // }
-            // block.next_movement = None;
-
-            for x in block.block.iter() {
-                coordinates.push(x.clone());
-            }
-        }
-
-        coordinates
-    };
+    let next_block_sx =  next_block_sender.clone();
+    let cur_block = Arc::clone(&current_block);
 
 
-    let render = Render::new();
+
+    let render = Render::new(next_block_sx, cur_block, walls, c2, blocks2);
     loop {
-        sleep(Duration::from_millis(500));
-        render.render(&build_coordinates());
+        sleep(Duration::from_millis(500)).await;
+        render.render().await;
     }
 }
 
@@ -282,6 +234,11 @@ fn draw_horizontal_line(start_x: i32, start_y: i32, end_y: i32) -> Result<Vec<Co
 // 3 |
 
 struct Render {
+    cur_block: Arc<Mutex<Option<Element>>>,
+    next_block_sx: Sender<Element>,
+    walls: Vec<Element>,
+    c2: Arc<Mutex<i32>>,
+    blocks2: Arc<Mutex<Vec<Element>>>,
 }
 
 
@@ -313,12 +270,94 @@ fn coordinates_to_hashmap(coordinates: &Vec<Coordinate>) -> HashMap<i32, Vec<&Co
 
 impl Render {
 
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(next_block_sx: Sender<Element>, cur_block: Arc<Mutex<Option<Element>>>, walls: Vec<Element>, c2: Arc<Mutex<i32>>, blocks2: Arc<Mutex<Vec<Element>>>) -> Self {
+        Self {
+            next_block_sx,
+            cur_block,
+            walls,
+            c2,
+            blocks2,
+        }
     }
 
-    pub fn render_coordinates(&self, coordinates: &Vec<Coordinate>) {
-        let mut coordinates_map = coordinates_to_hashmap(coordinates);
+
+
+    pub async fn build_coordinates(&self) -> Vec<Coordinate> {
+            let mut coordinates: Vec<Coordinate> = Vec::new();
+            self.walls.clone().into_iter().for_each(|x| {
+                coordinates.extend_from_slice(x.block.as_slice());
+            });
+
+            coordinates.push(Coordinate{x: 3, y: 3, b: Arc::new(self.c2.lock().unwrap().to_string() + " ")});
+
+            let mut c = self.cur_block.lock().unwrap();
+
+            let core_map = coordinates_to_hashmap(&coordinates);
+
+            let mut lets_move = true;
+            if c.is_some() {
+                let mut block = c.as_mut().unwrap();
+                match block.next_movement {
+                    Some(Down) => {
+                        let moved_block = fail_down(block.clone());
+                        for c in moved_block.iter() {
+                            let v = core_map.get(&c.y);
+                            if v.is_some() {
+                                if v.unwrap().iter().map(|x| x.x).filter(|x| *x == c.x).count() > 0 {
+                                    lets_move = false;
+                                    break
+                                }
+                            }
+                        }
+                        if lets_move {
+                            block.block = moved_block;
+                        }
+                    },
+                    _ => {
+
+                    }
+                }
+                block.next_movement = None;
+                for x in c.as_ref().unwrap().block.iter() {
+                    coordinates.push(x.clone());
+                }
+            }
+            if !lets_move {
+                // tokio::spawn(async {
+                //     sleep(Duration::from_millis(1000)).await;
+                *c = None;
+
+                let new_element = create_cube();
+                self.next_block_sx.send(new_element).await.unwrap();
+                // });
+
+            }
+
+            for block in self.blocks2.lock().unwrap().iter() {
+                // match block.next_movement {
+                //     Some(Down) => {
+                //         fail_down(block.clone());
+                //     },
+                //     _ => {
+                //
+                //
+                //     }
+                // }
+                // block.next_movement = None;
+
+                for x in block.block.iter() {
+                    coordinates.push(x.clone());
+                }
+            }
+
+            coordinates
+    }
+
+
+
+    pub async fn render_coordinates(&self) {
+        let coordinates = self.build_coordinates().await;
+        let mut coordinates_map = coordinates_to_hashmap(&coordinates);
 
         for y in 1..=16 {
             for x in 1..=16 {
@@ -344,8 +383,8 @@ impl Render {
             println!("");
         }
     }
-    pub fn render(&self, vec1: &Vec<Coordinate>) {
-        self.render_coordinates(vec1);
+    pub async fn render(&self) {
+        self.render_coordinates().await;
         self.clear();
     }
 
