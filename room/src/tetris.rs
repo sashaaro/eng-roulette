@@ -14,7 +14,6 @@ use in_keys::Terminal;
 use tokio::io;
 use tokio::io::{AsyncReadExt, Stdin};
 use tokio::sync::mpsc::{channel, Sender};
-use crate::tetris::Movement::Down;
 
 pub async fn create_tetris() {
     let counter = Arc::new(Mutex::new(0));
@@ -72,7 +71,7 @@ pub async fn create_tetris() {
             let mut c = cur_block.lock().unwrap();
             if c.is_some() {
                 let cc = &mut c.as_mut().unwrap();
-                cc.next_movement = Some(Down);
+                cc.next_movement = Some(Movement::Down);
 
                 // fail_down(cc);
             }
@@ -92,7 +91,15 @@ pub async fn create_tetris() {
     // let (key_sender, mut key_receiver) = channel(3);
 
 
+    let next_block_sx =  next_block_sender.clone();
     let cur_block = Arc::clone(&current_block);
+    let mut render = Arc::new(Mutex::new(Render::new(next_block_sx, cur_block, walls, c2, blocks2)));
+
+
+
+    let cur_block = Arc::clone(&current_block);
+    let mut r = render.clone();
+
     tokio::spawn(async move {
         let terminal = Terminal::new();
 
@@ -106,6 +113,7 @@ pub async fn create_tetris() {
                     if c.is_some() {
                         c.as_mut().unwrap().next_movement = Some(Movement::Left)
                     }
+                    r.lock().unwrap().render();
                 },
                 Key::ArrowRight => {
                     // key_sender.send(key).unwrap()
@@ -113,6 +121,7 @@ pub async fn create_tetris() {
                     if c.is_some() {
                         c.as_mut().unwrap().next_movement = Some(Movement::Right)
                     }
+                    r.lock().unwrap().render();
                 },
                 Key::ArrowUp => {
                     // turn
@@ -126,22 +135,32 @@ pub async fn create_tetris() {
         }
     });
 
-    let next_block_sx =  next_block_sender.clone();
-    let cur_block = Arc::clone(&current_block);
-
-
-
-    let mut render = Render::new(next_block_sx, cur_block, walls, c2, blocks2);
     loop {
         sleep(Duration::from_millis(500)).await;
-        render.render().await;
+        render.lock().unwrap().render().await;
     }
 }
 
-fn fail_down(block: Element) -> Vec<Coordinate> {
+fn move_down(block: Element) -> Vec<Coordinate> {
     let mut res = Vec::new();
     for x in block.block.iter() {
         res.push(Coordinate{x: x.x, y: x.y + 1, b: Arc::new(WALL)});
+    }
+    res
+}
+
+fn move_left(block: Element) -> Vec<Coordinate>  {
+    let mut res = Vec::new();
+    for x in block.block.iter() {
+        res.push(Coordinate{x: x.x - 1, y: x.y, b: Arc::new(WALL)});
+    }
+    res
+}
+
+fn move_right(block: Element) -> Vec<Coordinate>  {
+    let mut res = Vec::new();
+    for x in block.block.iter() {
+        res.push(Coordinate{x: x.x + 1, y: x.y, b: Arc::new(WALL)});
     }
     res
 }
@@ -166,7 +185,7 @@ fn put_block(block: &mut Element, start :Coordinate) {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 enum Movement {
     Up = 0,
     Right = 1,
@@ -174,7 +193,7 @@ enum Movement {
     Left = 3,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct Element {
     block: Vec<Coordinate>,
     next_movement: Option<Movement>,
@@ -329,22 +348,30 @@ impl Render {
 
             let core_map = coordinates_to_hashmap(&coordinates);
 
-            let mut lets_move = true;
+            let mut is_overlap = false;
+            let prev_movement = c.clone().unwrap_or(Element::default()).next_movement;
             if c.is_some() {
                 let mut block = c.as_mut().unwrap();
                 match block.next_movement {
-                    Some(Down) => {
-                        let moved_block = fail_down(block.clone());
-                        for c in moved_block.iter() {
-                            let v = core_map.get(&c.y);
-                            if v.is_some() {
-                                if v.unwrap().iter().map(|x| x.x).filter(|x| *x == c.x).count() > 0 {
-                                    lets_move = false;
-                                    break
-                                }
-                            }
+                    Some(Movement::Left) => {
+                        let moved_block = move_left(block.clone());
+                        is_overlap = overlap(&moved_block, core_map);
+
+                        if !is_overlap {
+                            block.block = moved_block;
                         }
-                        if lets_move {
+                    },
+                    Some(Movement::Right) => {
+                        let moved_block = move_right(block.clone());
+                        is_overlap = overlap(&moved_block, core_map);
+                        if !is_overlap {
+                            block.block = moved_block;
+                        }
+                    },
+                    Some(Movement::Down) => {
+                        let moved_block = move_down(block.clone());
+                        is_overlap = overlap(&moved_block, core_map);
+                        if !is_overlap {
                             block.block = moved_block;
                         }
                     },
@@ -357,7 +384,7 @@ impl Render {
                     coordinates.push(x.clone());
                 }
             }
-            if !lets_move {
+            if is_overlap && prev_movement == Some(Movement::Down)  {
                 // tokio::spawn(async {
                 //     sleep(Duration::from_millis(1000)).await;
 
@@ -417,4 +444,18 @@ impl Render {
     fn clear(&self) {
         print!("\x1B[2J\x1B[1;1H");
     }
+}
+
+
+fn overlap(block: &Vec<Coordinate>, core_map: HashMap<i32, Vec<&Coordinate>>) -> bool {
+    for c in block.iter() {
+        let v = core_map.get(&c.y);
+        if v.is_some() {
+            if v.unwrap().iter().map(|x| x.x).filter(|x| *x == c.x).count() > 0 {
+                return true;
+            }
+        }
+    }
+
+    false
 }
