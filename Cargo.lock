@@ -802,6 +802,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derived-deref"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "805ef2023ccd65425743a91ecd11fc020979a0b01921db3104fb606d18a7b43e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.89",
+]
+
+[[package]]
 name = "devise"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1581,6 +1592,16 @@ name = "impl-more"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aae21c3177a27788957044151cc2800043d127acaa460a47ebb9b84dfa2c6aa0"
+
+[[package]]
+name = "in-keys"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37b7fa5c771812ddba32bb67416fcf5e3d8a3cfe83e847dcac101a2f07a31bba"
+dependencies = [
+ "derived-deref",
+ "libc",
+]
 
 [[package]]
 name = "indexmap"
@@ -2528,6 +2549,7 @@ dependencies = [
  "clap",
  "futures",
  "http 1.1.0",
+ "in-keys",
  "serde",
  "serde_json",
  "tokio",

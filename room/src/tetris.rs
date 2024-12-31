@@ -2,12 +2,15 @@ use core::error::Error;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter, Write};
 use std::fs::Permissions;
+use std::future;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use tokio::time::sleep;
 use std::time::Duration;
 use tracing_subscriber::fmt;
 use std::option::Option;
+use in_keys::keys::Key;
+use in_keys::Terminal;
 use tokio::io;
 use tokio::io::{AsyncReadExt, Stdin};
 use tokio::sync::mpsc::{channel, Sender};
@@ -86,16 +89,39 @@ pub async fn create_tetris() {
         draw_line((2, 16), (16, 16)).unwrap()
     );
 
-    tokio::spawn(async move {
-        let mut stdin = io::stdin();
-        loop {
-            let mut buffer = [0;1];
-            stdin.read_exact(&mut buffer).await.unwrap();
+    // let (key_sender, mut key_receiver) = channel(3);
 
-            if buffer[0] == 27 {
-                break;
+
+    let cur_block = Arc::clone(&current_block);
+    tokio::spawn(async move {
+        let terminal = Terminal::new();
+
+        loop {
+            let key = terminal.read_key(); // Blocking, waits for user input
+
+            match key {
+                Key::ArrowLeft => {
+                    // key_sender.send(key).unwrap()
+                    let mut c = cur_block.lock().unwrap();
+                    if c.is_some() {
+                        c.as_mut().unwrap().next_movement = Some(Movement::Left)
+                    }
+                },
+                Key::ArrowRight => {
+                    // key_sender.send(key).unwrap()
+                    let mut c = cur_block.lock().unwrap();
+                    if c.is_some() {
+                        c.as_mut().unwrap().next_movement = Some(Movement::Right)
+                    }
+                },
+                Key::ArrowUp => {
+                    // turn
+                },
+                Key::ArrowDown => {
+                    // turn
+                },
+                _ => {}
             }
-            println!("You have hit: {:?}", buffer[0]);
 
         }
     });
