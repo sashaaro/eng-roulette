@@ -105,7 +105,7 @@ pub async fn create_tetris() {
 
 
 
-    let render = Render::new(next_block_sx, cur_block, walls, c2, blocks2);
+    let mut render = Render::new(next_block_sx, cur_block, walls, c2, blocks2);
     loop {
         sleep(Duration::from_millis(500)).await;
         render.render().await;
@@ -239,6 +239,8 @@ struct Render {
     walls: Vec<Element>,
     c2: Arc<Mutex<i32>>,
     blocks2: Arc<Mutex<Vec<Element>>>,
+
+    elements: Vec<Element>,
 }
 
 
@@ -277,18 +279,25 @@ impl Render {
             walls,
             c2,
             blocks2,
+            elements: vec!(),
         }
     }
 
 
 
-    pub async fn build_coordinates(&self) -> Vec<Coordinate> {
+    pub async fn build_coordinates(&mut self) -> Vec<Coordinate> {
             let mut coordinates: Vec<Coordinate> = Vec::new();
             self.walls.clone().into_iter().for_each(|x| {
                 coordinates.extend_from_slice(x.block.as_slice());
             });
 
             coordinates.push(Coordinate{x: 3, y: 3, b: Arc::new(self.c2.lock().unwrap().to_string() + " ")});
+
+            for block in self.elements.iter() {
+                for x in block.block.iter() {
+                    coordinates.push(x.clone());
+                }
+            }
 
             let mut c = self.cur_block.lock().unwrap();
 
@@ -325,6 +334,8 @@ impl Render {
             if !lets_move {
                 // tokio::spawn(async {
                 //     sleep(Duration::from_millis(1000)).await;
+
+                self.elements.push(c.as_ref().unwrap().clone());
                 *c = None;
 
                 let new_element = create_cube();
@@ -334,17 +345,6 @@ impl Render {
             }
 
             for block in self.blocks2.lock().unwrap().iter() {
-                // match block.next_movement {
-                //     Some(Down) => {
-                //         fail_down(block.clone());
-                //     },
-                //     _ => {
-                //
-                //
-                //     }
-                // }
-                // block.next_movement = None;
-
                 for x in block.block.iter() {
                     coordinates.push(x.clone());
                 }
@@ -355,7 +355,7 @@ impl Render {
 
 
 
-    pub async fn render_coordinates(&self) {
+    pub async fn render_coordinates(&mut self) {
         let coordinates = self.build_coordinates().await;
         let mut coordinates_map = coordinates_to_hashmap(&coordinates);
 
@@ -383,7 +383,7 @@ impl Render {
             println!("");
         }
     }
-    pub async fn render(&self) {
+    pub async fn render(&mut self) {
         self.render_coordinates().await;
         self.clear();
     }
