@@ -14,30 +14,18 @@ use in_keys::Terminal;
 use tokio::io;
 use tokio::io::{AsyncReadExt, Stdin};
 use tokio::sync::mpsc::{channel, Sender};
+use rand::random;
 
 pub async fn create_tetris() {
     let counter = Arc::new(Mutex::new(0));
 
 
     let c = counter.clone();
-    tokio::spawn(async move {
-        loop {
-            sleep(Duration::from_millis(2000)).await;
-            *c.lock().unwrap() += 1;
-        }
-    });
 
 
     let blocks: Arc<Mutex<Vec<Element>>> = Arc::new(Mutex::new(Vec::new()));
     let mut current_block: Arc<Mutex<Option<Element>>> = Arc::new(Mutex::new(None));
 
-    tokio::spawn(async move {
-        loop {
-            sleep(Duration::from_millis(1000)).await;
-
-            //current_block
-        }
-    });
 
     let (next_block_sender, mut next_block_receiver) = channel(3);
 
@@ -49,34 +37,7 @@ pub async fn create_tetris() {
     });
 
     let mut cur_block = Arc::clone(&current_block);
-    tokio::spawn(async move {
-        loop {
-            let mut new_element = next_block_receiver.recv().await;
-            if new_element.is_none() {
-                break;
-            }
-            let mut new_element = new_element.unwrap();
 
-            put_block(&mut new_element, Coordinate { x: 8, y: 2, b: Arc::new(String::new()) });
-            *cur_block.lock().unwrap() = Some(new_element);
-        }
-    });
-
-    let cur_block = Arc::clone(&current_block);
-    tokio::spawn(async move {
-        loop {
-            sleep(Duration::from_millis(1000)).await;
-
-
-            let mut c = cur_block.lock().unwrap();
-            if c.is_some() {
-                let cc = &mut c.as_mut().unwrap();
-                cc.next_movement = Some(Movement::Down);
-
-                // fail_down(cc);
-            }
-        }
-    });
 
     let c2 = counter.clone();
     let blocks2 = Arc::clone(&blocks.clone());
@@ -92,12 +53,25 @@ pub async fn create_tetris() {
 
 
     let next_block_sx =  next_block_sender.clone();
-    let cur_block = Arc::clone(&current_block);
+    let mut cur_block = Arc::clone(&current_block);
     let mut render = Arc::new(Mutex::new(Render::new(next_block_sx, cur_block, walls, c2, blocks2)));
 
+    let mut r = render.clone();
+    let mut cur_block = Arc::clone(&current_block);
+    tokio::spawn(async move {
+        loop {
+            let mut new_element = next_block_receiver.recv().await;
+            if new_element.is_none() {
+                break;
+            }
+            let mut c = cur_block.lock().unwrap();
+            *c = Some(create_cube());
+            put_block_on_start(c.as_mut().unwrap());
+        }
+    });
 
 
-    let cur_block = Arc::clone(&current_block);
+    let mut cur_block = Arc::clone(&current_block);
     let mut r = render.clone();
 
     tokio::spawn(async move {
@@ -108,11 +82,12 @@ pub async fn create_tetris() {
 
             match key {
                 Key::ArrowLeft => {
-                    // key_sender.send(key).unwrap()
+                    // key_sender.send(key).unwrap();
                     let mut c = cur_block.lock().unwrap();
                     if c.is_some() {
                         c.as_mut().unwrap().next_movement = Some(Movement::Left)
                     }
+                    drop(c);
                     r.lock().unwrap().render();
                 },
                 Key::ArrowRight => {
@@ -121,13 +96,23 @@ pub async fn create_tetris() {
                     if c.is_some() {
                         c.as_mut().unwrap().next_movement = Some(Movement::Right)
                     }
-                    r.lock().unwrap().render();
+                    drop(c);
+                    let mut rr = r.lock().unwrap();
+                    rr.render();
+                    drop(rr);
                 },
                 Key::ArrowUp => {
                     // turn
                 },
                 Key::ArrowDown => {
-                    // turn
+                    let mut c = cur_block.lock().unwrap();
+                    if c.is_some() {
+                        c.as_mut().unwrap().next_movement = Some(Movement::Down)
+                    }
+                    drop(c);
+                    let mut rr = r.lock().unwrap();
+                    rr.render();
+                    drop(rr);
                 },
                 _ => {}
             }
@@ -135,10 +120,41 @@ pub async fn create_tetris() {
         }
     });
 
-    loop {
-        sleep(Duration::from_millis(500)).await;
-        render.lock().unwrap().render().await;
+
+    // let mut r = render.clone();
+    //
+    // tokio::spawn(async move {
+    //     loop {
+    //         sleep(Duration::from_millis(2000)).await;
+    //         *c.lock().unwrap() += 1;
+    //
+    //         r.lock().unwrap().render();
+    //     }
+    // });
+
+    let mut cur_block = Arc::clone(&current_block);
+    tokio::spawn(async move {
+
+        loop {
+        sleep(Duration::from_millis(1400)).await;
+
+
+            let mut c = cur_block.lock().unwrap();
+            if c.is_some() {
+                let cc = c.as_mut().unwrap();
+                //if cc.next_movement == None {
+                    let mut rr = render.lock().unwrap();
+
+                    cc.next_movement = Some(Movement::Down);
+                    let _ = cc;
+                    drop(c);
+                    rr.render();
+                    drop(rr);
+                //}
+            }
     }
+    });
+
 }
 
 fn move_down(block: Element) -> Vec<Coordinate> {
@@ -177,7 +193,10 @@ fn create_cube() -> Element {
 fn spawn_block() {
 
 }
+fn put_block_on_start(block: &mut Element) {
+    put_block(block, Coordinate { x: 8, y: 2, b: Arc::new(String::new()) });
 
+}
 fn put_block(block: &mut Element, start :Coordinate) {
     for p in block.block.iter_mut() {
         p.x += start.x - 1;
@@ -330,7 +349,7 @@ impl Render {
 
 
 
-    pub async fn build_coordinates(&mut self) -> Vec<Coordinate> {
+    pub fn build_coordinates(&mut self) -> Vec<Coordinate> {
             let mut coordinates: Vec<Coordinate> = Vec::new();
             self.walls.clone().into_iter().for_each(|x| {
                 coordinates.extend_from_slice(x.block.as_slice());
@@ -389,10 +408,10 @@ impl Render {
                 //     sleep(Duration::from_millis(1000)).await;
 
                 self.elements.push(c.as_ref().unwrap().clone());
-                *c = None;
+                *c = Some(create_cube());
+                put_block_on_start(c.as_mut().unwrap());
 
-                let new_element = create_cube();
-                self.next_block_sx.send(new_element).await.unwrap();
+                //self.next_block_sx.blocking_send(new_element).unwrap();
                 // });
 
             }
@@ -406,10 +425,8 @@ impl Render {
             coordinates
     }
 
-
-
-    pub async fn render_coordinates(&mut self) {
-        let coordinates = self.build_coordinates().await;
+    pub fn render_coordinates(&mut self) {
+        let coordinates = self.build_coordinates();
         let mut coordinates_map = coordinates_to_hashmap(&coordinates);
 
         for y in 1..=16 {
@@ -436,8 +453,8 @@ impl Render {
             println!("");
         }
     }
-    pub async fn render(&mut self) {
-        self.render_coordinates().await;
+    pub fn render(&mut self) {
+        self.render_coordinates();
         self.clear();
     }
 
