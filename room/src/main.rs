@@ -1,3 +1,5 @@
+mod webrtc;
+
 use axum::{
     routing::{get, post},
     http::StatusCode,
@@ -5,7 +7,9 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use clap::Parser;
+use futures::TryFutureExt;
 use tracing_subscriber::fmt::format;
+use crate::webrtc::start_webrtc;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -14,6 +18,9 @@ pub struct Args {
     /// Number of times to greet
     #[arg(short, long, default_value_t = 8080)]
     pub port: u16,
+
+    #[arg(short, long, default_value_t = false)]
+    pub webrtc: bool,
 }
 
 fn app() -> Router {
@@ -27,7 +34,7 @@ fn app() -> Router {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     // initialize tracing
     tracing_subscriber::fmt::init();
 
@@ -36,10 +43,13 @@ async fn main() {
 
     // build our application with a route
 
-
-    // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await.unwrap();
-    axum::serve(listener, app()).await.unwrap();
+    if args.webrtc {
+        start_webrtc().await
+    } else {
+        // run our app with hyper, listening globally on port 3000
+        let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await.unwrap();
+        Ok(axum::serve(listener, app()).await.unwrap())
+    }
 }
 
 // basic handler that responds with a static string
