@@ -4,7 +4,9 @@ use std::sync::Arc;
 mod tests {
     use super::*;
     use actix_web::{test, web, App, HttpMessage};
+    use actix_web::body::to_bytes;
     use actix_web::http::header::ContentType;
+    use serde_json::Value::String;
     use sqlx::Executor;
     use crate::application::account::Application;
     use crate::{config_app, infra};
@@ -12,6 +14,7 @@ mod tests {
     use crate::infra::repository::{PgPremiumRepository, PgUserRepository};
     use crate::infra::service::InternalBillingService;
     use crate::infra::db;
+    use crate::infra::routes::RegisterResp;
 
     #[actix_web::test]
     async fn test_index_get() {
@@ -28,14 +31,16 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn test_register() {
+    async fn test_register_and_login() {
         let pool = db::pg().await;
-        pool.execute("truncate \"user\" cascade").await.unwrap();
 
         let app = test::init_service(
             App::new().configure(config_app(pool.clone()))
         )
             .await;
+
+
+        pool.execute("truncate \"user\" cascade").await.unwrap();
 
         let req = test::TestRequest::post()
             .insert_header(ContentType::json())
@@ -44,5 +49,20 @@ mod tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status().as_u16(), 200);
+
+
+        let req = test::TestRequest::post()
+            .insert_header(ContentType::json())
+            .set_payload("{\"name\": \"alex\", \"password\": \"123\"}")
+            .uri("/login")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status().as_u16(), 200);
+
+        let b = to_bytes(resp.into_body()).await.unwrap();
+        let b = std::str::from_utf8(&b).unwrap();
+
+        let dto: RegisterResp = serde_json::from_str(b).expect("Failed to parse json");
+        assert_eq!(true, dto.token.len() > 0);
     }
 }

@@ -67,6 +67,7 @@ fn config_app(pool: Pool<Postgres>) -> Box<dyn Fn(&mut ServiceConfig)> {
             .service(infra::routes::get_account)
             .service(infra::routes::buypremium)
             .service(infra::routes::register)
+            .service(infra::routes::login)
             .service(infra::routes::me);
     })
 }

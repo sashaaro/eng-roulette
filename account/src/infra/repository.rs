@@ -86,6 +86,30 @@ impl repository::UserRepository for PgUserRepository {
             }
         }
     }
+
+    async fn find_username(&self, username: &str) -> Result<Option<User>, Box<dyn Error>> {
+        let row = sqlx::query(
+            "SELECT * FROM \"user\" WHERE username = $1",
+        ).bind(username).fetch_one(&self.pool).await;
+        match row {
+            Ok(row) => {
+                let u = User {
+                    id: row.get("id"),
+                    username: row.get("username"),
+                    password: row.get("password"),
+                    is_active: row.get("is_active"),
+                    premium_until: row.get("premium_until"),
+                };
+                Ok(Some(u))
+            },
+            Err(err) => {
+                match err {
+                    RowNotFound => Ok(None),
+                    _ => Err(Box::try_from(err).unwrap())
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone)]

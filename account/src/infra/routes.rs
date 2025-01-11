@@ -13,9 +13,9 @@ struct RegisterBody {
     password: String
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-struct RegisterResp{
-    token: String,
+#[derive(Deserialize, Serialize, Debug, Default)]
+pub(crate) struct RegisterResp{
+    pub token: String,
 }
 
 const JWT_TTL: i64= 60;
@@ -48,6 +48,37 @@ async fn register(
         }
     }
  }
+
+#[post("/login")]
+async fn login(
+    req_body: String,
+    req: HttpRequest,
+    auth_manager: web::Data<AuthManager>,
+    app: web::Data<Application>,
+) -> impl Responder {
+    let body = serde_json::from_str::<RegisterBody>(req_body.as_str());
+    if body.is_err() {
+        return HttpResponse::BadRequest().body(format!("err: {:?}", body.err()));
+    }
+
+    let b = body.unwrap();
+
+    let user = app.login(b.name.clone(), b.password.clone()).await;
+
+    if user.is_err() {
+        return HttpResponse::NotFound().body(format!("err: {:?}", user.err()));
+    }
+    let user = user.unwrap();
+
+    let token = auth_manager.auth_header(Claims {
+        sub: user.id,
+        exp: chrono::Utc::now().timestamp() + JWT_TTL,
+    });
+
+    HttpResponse::Ok().json(&RegisterResp{
+        token: token
+    })
+}
 
 #[get("/me")]
 async fn me(

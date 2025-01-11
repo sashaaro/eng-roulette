@@ -52,4 +52,16 @@ impl Application {
     pub async fn create_user(&self, name: String, password: String) -> Result<User, Box<dyn Error>> {
         self.user_repo.create_user(name, password).await
     }
+
+    pub async fn login(&self, name: String, password: String) -> Result<User, Box<dyn Error>> {
+        let user = self.user_repo.find_username(&name).await?;
+        if user.is_some() {
+            let user = user.unwrap();
+            if user.password == password {
+                return Ok(user);
+            }
+        }
+
+        Err(Box::new(sqlx::Error::RowNotFound))
+    }
 }

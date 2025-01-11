@@ -26,9 +26,9 @@ impl AuthManager {
         return token.unwrap()  // TODO stop use unwrap
     }
     pub fn fetch_claims_from_req(&self, req: &HttpRequest) -> Result<Claims, Box<dyn std::error::Error>> {
-        let mut authHeader = req.headers().get("Authorization").unwrap().to_str()?.to_string();
-        authHeader = authHeader.trim_start_matches("Bearer").trim().to_string();
-        let token = jsonwebtoken::decode::<Claims>(authHeader.as_str(),
+        let mut auth_header = req.headers().get("Authorization").unwrap().to_str()?.to_string();
+        auth_header = auth_header.trim_start_matches("Bearer").trim().to_string();
+        let token = jsonwebtoken::decode::<Claims>(auth_header.as_str(),
                                                    &self.decoding_key,
                                                    &jsonwebtoken::Validation::default()
         );

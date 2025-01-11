@@ -12,6 +12,7 @@ pub type Tx2pcID = Uuid;
 pub trait UserRepository: Send + Sync {
     async fn create_user(&self, name: String, password: String) -> Result<User, Box<dyn Error>>;
     async fn find_user(&self, id: i64) -> Result<Option<User>, Box<dyn Error>>;
+    async fn find_username(&self, username: &str) -> Result<Option<User>, Box<dyn Error>>;
 }
 
 #[async_trait]
