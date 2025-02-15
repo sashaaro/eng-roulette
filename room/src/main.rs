@@ -33,6 +33,7 @@ fn app() -> Router {
     app
 }
 
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // initialize tracing
@@ -43,13 +44,16 @@ async fn main() -> anyhow::Result<()> {
 
     // build our application with a route
 
-    if args.webrtc {
-        start_webrtc().await
-    } else {
-        // run our app with hyper, listening globally on port 3000
-        let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await.unwrap();
-        Ok(axum::serve(listener, app()).await.unwrap())
-    }
+    let app = start_webrtc().await;
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await.unwrap();
+    Ok(axum::serve(listener, app).await.unwrap())
+    // if args.webrtc {
+    //     start_webrtc().await
+    // } else {
+    //     // run our app with hyper, listening globally on port 3000
+    //     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await.unwrap();
+    //     Ok(axum::serve(listener, app()).await.unwrap())
+    // }
 }
 
 // basic handler that responds with a static string
