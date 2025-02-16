@@ -49,11 +49,6 @@ Logs<br />
 
 
     const ws = new WebSocket("ws://localhost:8080/ws?session_id=" + session_id)
-
-    ws.addEventListener("open", (event) => {
-        ws.send("hi")
-    });
-
     let pc
 
 

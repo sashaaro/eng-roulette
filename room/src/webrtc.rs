@@ -35,6 +35,8 @@ use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use base64::prelude::BASE64_STANDARD;
 use futures::executor::block_on;
+use futures::{SinkExt, StreamExt};
+use futures::stream::{SplitSink, SplitStream};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
 use webrtc::peer_connection::RTCPeerConnection;
@@ -42,6 +44,7 @@ use crate::{create_user, root, CreateUser, User};
 use tower_http::cors::CorsLayer;
 use rand::{random, Rng};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
+use webrtc::peer_connection::sdp::sdp_type::RTCSdpType;
 use webrtc::track::track_remote::TrackRemote;
 
 lazy_static! {
@@ -182,14 +185,14 @@ async fn sdp(
         let session_id3 = session_id.clone();
         let peer_connection2 = Arc::clone(&peer_connection);
         peer_connection.on_negotiation_needed(Box::new(move || {
-            let conns1 = block_on(conns.lock());
-            let other_conn = conns1.get(&session_id3).unwrap();
+            let mut conns1 = block_on(conns.lock());
+            let other_conn = conns1.get_mut(&session_id3).unwrap();
             print!("on_negotiation_needed");
 
             let sdp = block_on(peer_connection2.create_offer(None)).unwrap();
             block_on(peer_connection2.set_local_description(sdp.clone())).unwrap();
 
-            block_on(block_on(other_conn.lock()).send(Message::from(serde_json::to_string(&sdp).unwrap()))).unwrap();
+            block_on(other_conn.send(Message::from(serde_json::to_string(&sdp).unwrap()))).unwrap();
 
             Box::pin(async {})
         }));
@@ -344,84 +347,71 @@ async fn ws(
     Query(req): Query<WsRequest>,
     State(app_state): State<AppState>,
 ) -> impl IntoResponse {
+
+
+    let peers = app_state.peers.clone();
     ws.on_upgrade(move |socket| {
-        let socket = Arc::new(Mutex::new(socket));
-        block_on(app_state.conns.lock()).insert(req.session_id.clone(), Arc::clone(&socket));
-        handle_socket(socket, req.session_id, Arc::clone(&app_state.conns))
+        let (mut sender, mut receiver) = socket.split();
+        block_on(app_state.conns.lock()).insert(req.session_id.clone(), sender);
+
+        handle_socket(peers, receiver, req.session_id)
     })
 }
 
-fn process_message(msg: Message) -> ControlFlow<(), ()> {
-    let who = "1";
+async fn process_message(peers: Arc<Mutex<HashMap<String, Arc<RTCPeerConnection>>>>, msg: Message, session_id: String) -> ControlFlow<(), ()> {
     match msg {
         Message::Text(t) => {
-            println!(">>> {who} sent str: {t:?}");
+            let sdp = serde_json::from_str::<RTCSessionDescription>(&t).unwrap();
+            if (sdp.sdp_type == RTCSdpType::Answer) {
+
+                let peer_connection = peers.lock().await.get(&session_id).unwrap().clone();
+
+
+                peer_connection.set_remote_description(sdp).await.unwrap();
+            }
         }
         Message::Binary(d) => {
-            println!(">>> {} sent {} bytes: {:?}", who, d.len(), d);
+            println!(">>> sent {} bytes: {:?}", d.len(), d);
         }
         Message::Close(c) => {
             if let Some(cf) = c {
                 println!(
                     ">>> {} sent close with code {} and reason `{}`",
-                    who, cf.code, cf.reason
+                    session_id, cf.code, cf.reason
                 );
             } else {
-                println!(">>> {who} somehow sent close message without CloseFrame");
+                println!(">>> {session_id} somehow sent close message without CloseFrame");
             }
             return ControlFlow::Break(());
         }
 
         Message::Pong(v) => {
-            println!(">>> {who} sent pong with {v:?}");
+            println!(">>> {session_id} sent pong with {v:?}");
         }
         // You should never need to manually handle Message::Ping, as axum's websocket library
         // will do so for you automagically by replying with Pong and copying the v according to
         // spec. But if you need the contents of the pings you can see them here.
         Message::Ping(v) => {
-            println!(">>> {who} sent ping with {v:?}");
+            println!(">>> {session_id} sent ping with {v:?}");
         }
     }
     ControlFlow::Continue(())
 }
 
-async fn handle_socket(mut socket: Arc<Mutex<WebSocket>>, session_id: String, conns: Arc<Mutex<HashMap<String, Arc<Mutex<WebSocket>>>>>) {
-    let who = session_id;
-    if socket.lock().await
-        .send(Message::Ping(Bytes::from_static(&[1, 2, 3])))
-        .await
-        .is_ok()
-    {
-        println!("Pinged {who}...");
-    } else {
-        println!("Could not send ping {who}!");
-        // no Error here since the only thing we can do is to close the connection.
-        // If we can not send messages, there is no way to salvage the statemachine anyway.
-        return;
-    }
-
-    if let Some(msg) = socket.lock().await.recv().await {
-        if let Ok(msg) = msg {
-            if process_message(msg).is_break() {
+async fn handle_socket(peers: Arc<Mutex<HashMap<String, Arc<RTCPeerConnection>>>>, mut receiver: SplitStream<WebSocket>, session_id: String) {
+    tokio::spawn(async move {
+        while let Some(msg) = receiver.next().await {
+            if let Ok(msg) = msg {
+                let peers = Arc::clone(&peers);
+                if process_message(peers, msg, session_id.clone()).await.is_break() {
+                    return;
+                }
+            } else {
+                println!("client {session_id} abruptly disconnected");
                 return;
             }
-        } else {
-            println!("client {who} abruptly disconnected");
-            return;
         }
-    }
-
-    for i in 1..2 {
-        if socket.lock().await
-            .send(Message::Text("{\"hi\": 123}".into()))
-            .await
-            .is_err()
-        {
-            println!("client {who} abruptly disconnected");
-            return;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
+    });
 }
 
 #[derive(Clone, Default)]
@@ -429,7 +419,7 @@ struct AppState {
     peers: Arc<Mutex<HashMap<String, Arc<RTCPeerConnection>>>>,
     tracks: Arc<Mutex<HashMap<String, Arc<TrackRemote>>>>,
     local_tracks: Arc<Mutex<HashMap<String, Arc<TrackRemote>>>>,
-    conns: Arc<Mutex<HashMap<String, Arc<Mutex<WebSocket>>>>>,
+    conns: Arc<Mutex<HashMap<String, SplitSink<WebSocket, Message>>>>,
 }
 
 
