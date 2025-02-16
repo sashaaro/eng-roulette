@@ -33,17 +33,99 @@ Logs<br />
         document.getElementById('logs').innerHTML += msg + '<br>'
     }
 
+    function makeid(length) {
+        let result = '';
+        const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        const charactersLength = characters.length;
+        let counter = 0;
+        while (counter < length) {
+            result += characters.charAt(Math.floor(Math.random() * charactersLength));
+            counter += 1;
+        }
+        return result;
+    }
+
+    const session_id = makeid(5);
+
+
+    const ws = new WebSocket("ws://localhost:8080/ws?session_id=" + session_id)
+
+    ws.addEventListener("open", (event) => {
+        ws.send("hi")
+    });
+
+    let pc
+
+
+    ws.addEventListener("message", (event) => {
+        // console.log(event.data)
+        // if (event.data == "renegotiation") {
+        //     renegotiation();
+        // }
+
+        const d = JSON.parse(event.data)
+        if (d.type == "offer") {
+            pc.setRemoteDescription(d);
+        }
+    })
+
+    let candidates = [];
+    let renegotiation = function () {
+        // candidates = [];
+
+        pc.createOffer()
+            .then(offer => {
+                pc.setLocalDescription(offer)
+                fetch("http://localhost:8080/sdp", {method: "post",
+                    body: JSON.stringify({offer, session_id}),
+                    headers: {
+                        "Content-Type": "application/json"
+                    }})
+                    .then(res => res.json())
+                    .then(resp => {
+                        console.log(resp)
+                        //session_id = resp.session_id
+                        pc.setRemoteDescription(resp.answer)
+
+                        setTimeout(() => {
+                            console.log(candidates)
+
+
+
+                            fetch("http://localhost:8080/candidates", {method: "post",
+                                body: JSON.stringify({candidates, session_id}),
+                                headers: {
+                                    "Content-Type": "application/json"
+                                }})
+                                // .then(res => res.json())
+                                .then(resp => {
+
+                                })
+
+
+
+                        }, 2000)
+                    })
+            })
+            .catch(log)
+    }
+
     window.createSession = isPublisher => {
-        let pc = new RTCPeerConnection({
+        pc = new RTCPeerConnection({
             iceServers: [
                 {
                     urls: ['stun:stun.l.google.com:19302', 'stun:stun.l.google.com:5349', 'stun:stun1.l.google.com:3478']
                 }
             ]
         })
+
+        pc.onnegotiationneeded = e => {
+            console.log('negotiationneeded', e)
+        }
+
+
         pc.oniceconnectionstatechange = e => log(pc.iceConnectionState)
 
-        let candidates = [];
         pc.onicecandidate = event => {
             //console.log(event);
             if (event.candidate === null) {
@@ -64,50 +146,13 @@ Logs<br />
         }
 
 
-        let session_id;
         if (isPublisher) {
-
-
             navigator.mediaDevices.getUserMedia({ video: true, audio: false })
                 .then(stream => {
                     stream.getTracks().forEach(track => pc.addTrack(track, stream));
                     //document.getElementById('video1').srcObject = stream
 
-                    pc.createOffer()
-                        .then(d => {
-                            pc.setLocalDescription(d)
-                            fetch("http://localhost:8080/sdp", {method: "post",
-                                body: JSON.stringify(d),
-                                headers: {
-                                "Content-Type": "application/json"
-                                }})
-                                .then(res => res.json())
-                                .then(resp => {
-                                    console.log(resp)
-                                    session_id = resp.session_id
-                                    pc.setRemoteDescription(resp.answer)
-
-                                    setTimeout(() => {
-                                        console.log(candidates)
-
-
-
-                                        fetch("http://localhost:8080/candidates", {method: "post",
-                                            body: JSON.stringify({candidates, session_id}),
-                                            headers: {
-                                                "Content-Type": "application/json"
-                                            }})
-                                            // .then(res => res.json())
-                                            .then(resp => {
-
-                                            })
-
-
-
-                                    }, 2000)
-                                })
-                        })
-                        .catch(log)
+                    renegotiation()
 
 
                 }).catch(log)
