@@ -65,7 +65,13 @@ Logs<br />
 
         const d = JSON.parse(event.data)
         if (d.type == "offer") {
+            console.log(d)
             pc.setRemoteDescription(d);
+            pc.createAnswer().then(sdp => {
+                console.log(sdp)
+                pc.setLocalDescription(sdp)
+                ws.send(JSON.stringify(sdp))
+            })
         }
     })
 

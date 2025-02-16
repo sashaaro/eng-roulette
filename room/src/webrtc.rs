@@ -195,11 +195,35 @@ async fn sdp(
         }));
 
         let session_id2 = session_id.clone();
+        let pc = Arc::downgrade(&peer_connection);
         peer_connection.on_track(Box::new(move |track, r, t| {
 
             block_on(app_state.tracks.lock()).insert(session_id2.clone(), track.clone());
 
             let media_ssrc = track.ssrc();
+            let pc2 = pc.clone();
+            tokio::spawn(async move {
+                let mut result = Result::<usize>::Ok(0);
+                while result.is_ok() {
+                    let timeout = tokio::time::sleep(Duration::from_secs(3));
+                    tokio::pin!(timeout);
+
+                    tokio::select! {
+                    _ = timeout.as_mut() =>{
+                        if let Some(pc) = pc2.upgrade(){
+                            result = pc.write_rtcp(&[Box::new(PictureLossIndication{
+                                sender_ssrc: 0,
+                                media_ssrc,
+                            })]).await.map_err(Into::into);
+                        }else{
+                            break;
+                        }
+                    }
+                };
+                }
+            });
+
+
 
 
             let mut other_pc: Option<Arc<RTCPeerConnection>> = None;
@@ -214,29 +238,6 @@ async fn sdp(
 
 
             if other_pc.is_some() {
-                let other_pc = Arc::downgrade(&other_pc.unwrap());
-
-                tokio::spawn(async move {
-                    let mut result = Result::<usize>::Ok(0);
-                    while result.is_ok() {
-                        let timeout = tokio::time::sleep(Duration::from_secs(3));
-                        tokio::pin!(timeout);
-
-                        tokio::select! {
-                    _ = timeout.as_mut() =>{
-                        if let Some(pc) = other_pc.upgrade(){
-                            result = pc.write_rtcp(&[Box::new(PictureLossIndication{
-                                sender_ssrc: 0,
-                                media_ssrc,
-                            })]).await.map_err(Into::into);
-                        }else{
-                            break;
-                        }
-                    }
-                };
-                    }
-                });
-
                 let conns = app_state.conns.clone();
                 let session_id3 = session_id2.clone();
                 let peers2 = Arc::clone(&peers);
@@ -248,16 +249,19 @@ async fn sdp(
                         "webrtc-rs".to_owned(),
                     ));
 
+                    let local_track2 = Arc::clone(&local_track);
 
                     let other_session = other_session.unwrap();
                     let peers3 = peers2.lock().await;
                     let other_peer = peers3.get(&other_session).unwrap();
-                    other_peer.add_track(local_track.clone()).await.unwrap();
+                    other_peer.add_track(local_track).await.unwrap();
                     drop(peers3);
 
+
+                    print!("send rtp to {} -> {}", &session_id3, &other_session);
                     // Read RTP packets being sent to webrtc-rs
                     while let Ok((rtp, _)) = track.read_rtp().await {
-                        if let Err(err) = local_track.write_rtp(&rtp).await {
+                        if let Err(err) = local_track2.write_rtp(&rtp).await {
                             if Error::ErrClosedPipe != err {
                                 print!("output track write_rtp got error: {err} and break");
                                 break;
@@ -407,9 +411,9 @@ async fn handle_socket(mut socket: Arc<Mutex<WebSocket>>, session_id: String, co
         }
     }
 
-    for i in 1..5 {
+    for i in 1..2 {
         if socket.lock().await
-            .send(Message::Text(format!("Hi {i} times!").into()))
+            .send(Message::Text("{\"hi\": 123}".into()))
             .await
             .is_err()
         {
