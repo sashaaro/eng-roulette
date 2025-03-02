@@ -56,7 +56,6 @@ use crate::webrtc::types::{AnswerResponse, CandidatesRequest};
 
 type SocketClient = Arc<(SplitSink<WebSocket, Message>, SplitStream<WebSocket>)>;
 
-#[derive(Default)]
 struct Peer {
     session_id: String,
     rtp_peer: RTCPeerConnection,
@@ -64,12 +63,10 @@ struct Peer {
     //local_tracks: Vec<Box<dyn TrackLocal>>,
 }
 
-#[derive(Default)]
 struct SFU {
     rooms: Mutex<HashMap<String, Arc<Mutex<HashMap<String, Arc<Peer>>>>>>
 }
 
-#[derive(Default)]
 struct SfuService(Arc<(SFU)>);
 
 impl Clone for SfuService {
@@ -113,7 +110,7 @@ impl SfuService {
             //local_tracks: vec![],
         });
 
-        room.insert(session_id, Default::default());
+        room.insert(session_id, Arc::clone(&peer));
 
         peer.rtp_peer.on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
             println!("Peer Connection on ice candidate: {:?}", c);
@@ -139,12 +136,14 @@ impl SfuService {
         let sfu = self.clone();
 
         let room_id = room_id.clone();
+        let session_id2 = session_id.clone();
         peer.rtp_peer.on_track(Box::new(move |track, r, t| {
+            let weak_peer = Arc::downgrade(&peer2);
+
             Box::pin(async move {
                 // peer2.local_tracks.insert(session_id.clone(), track.clone());
 
                 let media_ssrc = track.ssrc();
-                let weak_peer = Arc::downgrade(&peer2);
                 tokio::spawn(async move {
                     let mut result = Result::<usize>::Ok(0);
                     while result.is_ok() {
@@ -167,15 +166,16 @@ impl SfuService {
                 });
 
                 let sfu2 = sfu.clone();
-                let rooms = sfu.rooms.lock().await;
+                let rooms = sfu2.clone().rooms.lock().await;
+                let sfu2 = sfu.clone();
 
                 rooms.get(&room_id).unwrap().lock().await.iter().for_each(|(participant_id, participant_peer)| {
-                    if session_id != *participant_id {
+                    if session_id2 != *participant_id {
                         let sfu2 = sfu2.clone();
                         let track = Arc::clone(&track);
-                        tokio::spawn(async move {
-                            sfu2.connect_peer(Arc::clone(&track), participant_peer).await;
-                        });
+                        // tokio::spawn(async move {
+                        //     sfu2.connect_peer(Arc::clone(&track), participant_peer).await;
+                        // });
                     }
                 });
             })
@@ -369,13 +369,13 @@ async fn process_message(sfu: Arc<SFU>, msg: Message, session_id: String, room_i
 }
 
 async fn handle_socket(sfu: Arc<SFU>, session: Arc<Mutex<HashMap<String, SocketClient>>>, session_id: String, room_id: String) {
-    let socket_client = session.lock().await.get(&session_id).unwrap();
 
+    let session = Arc::clone(&session);
     let sfu = Arc::clone(&sfu);
     tokio::spawn(async move {
-        while let Some(msg) = socket_client.1.next().await {
+        while let Some(msg) = session.lock().await.get_mut(&session_id).unwrap().1.next().await {
             if let Ok(msg) = msg {
-                if process_message(sfu, msg, session_id.clone(), room_id).await.is_break() {
+                if process_message(Arc::clone(&sfu), msg, session_id.clone(), room_id.clone()).await.is_break() {
                     return;
                 }
             } else {
@@ -386,15 +386,20 @@ async fn handle_socket(sfu: Arc<SFU>, session: Arc<Mutex<HashMap<String, SocketC
     });
 }
 
-#[derive(Default)]
+#[derive(Clone)]
 struct AppState {
     sessions: Arc<Mutex<HashMap<String, SocketClient>>>,
-    sfu: Arc<SFU>,
+    sfu: SfuService,
 }
 
 
 pub async fn start_webrtc() -> Router {
-    let state = AppState::default();
+    let state = AppState{
+        sfu: SfuService(Arc::new(SFU{
+            rooms: Mutex::new(HashMap::new()),
+        })),
+        sessions: Arc::new(Mutex::new(HashMap::new())),
+    };
 
     let app = Router::new()
         .route("/ws", any(ws))
