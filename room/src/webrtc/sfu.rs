@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
@@ -55,11 +56,12 @@ use crate::webrtc::types::{AnswerResponse, CandidatesRequest};
 
 type SocketClient = Arc<(SplitSink<WebSocket, Message>, SplitStream<WebSocket>)>;
 
+#[derive(Default)]
 struct Peer {
     session_id: String,
     rtp_peer: RTCPeerConnection,
     remote_tracks: Vec<TrackRemote>,
-    local_tracks: Vec<Box<dyn TrackLocal>>,
+    //local_tracks: Vec<Box<dyn TrackLocal>>,
 }
 
 #[derive(Default)]
@@ -72,7 +74,7 @@ impl SFU {
         &mut self,
         session_id: String,
         room_id: String,
-    ) -> &mut Self {
+    ) -> Arc<Peer> {
         let mut rooms = self.rooms.lock().await;
         if !rooms.contains_key(&room_id) {
             rooms.insert(room_id.clone(), Default::default());
@@ -81,17 +83,18 @@ impl SFU {
 
         let mut room = room.lock().await;
 
-        let mut peer: &mut Arc<Peer>;
+        let mut peer: Arc<Peer>;
         if room.contains_key(&session_id) {
-            peer = room.get_mut(&session_id).unwrap();
-            return self
+            peer = room.get(&session_id).unwrap().clone();
+
+            return peer;
         }
 
-        peer = &mut Arc::new(Peer {
+        peer = Arc::new(Peer {
             session_id: session_id.clone(),
             rtp_peer: create_peer().await.unwrap(),
             remote_tracks: vec![],
-            local_tracks: vec![],
+            //local_tracks: vec![],
         });
 
         room.insert(session_id, Default::default());
@@ -104,10 +107,13 @@ impl SFU {
 
         let peer2 = Arc::clone(&peer);
         peer.rtp_peer.on_negotiation_needed(Box::new(move || {
-            Box::pin(async move {
-                let sdp = peer2.rtp_peer.create_offer(None).unwrap();
-                peer2.rtp_peer.set_local_description(sdp.clone()).unwrap();
-                // other_conn.send(Message::from(serde_json::to_string(&sdp).unwrap())).unwrap();
+            Box::pin({
+                let peer2 = Arc::clone(&peer2);
+                async move {
+                    let sdp = peer2.rtp_peer.create_offer(None).await.unwrap();
+                    peer2.rtp_peer.set_local_description(sdp.clone()).await.unwrap();
+                    // other_conn.send(Message::from(serde_json::to_string(&sdp).unwrap())).unwrap();
+                }
             })
         }));
 
@@ -115,9 +121,11 @@ impl SFU {
         let peer2 = Arc::clone(&peer);
 
         let sfu = self;
+
+        let room_id = room_id.clone();
         peer.rtp_peer.on_track(Box::new(move |track, r, t| {
             Box::pin(async move {
-                peer2.local_tracks.insert(session_id.clone(), track.clone());
+                // peer2.local_tracks.insert(session_id.clone(), track.clone());
 
                 let media_ssrc = track.ssrc();
                 let weak_peer = Arc::downgrade(&peer2);
@@ -142,7 +150,7 @@ impl SFU {
                     }
                 });
 
-                sfu.rooms.lock().await.get(room_id).unwrap().lock().await.iter().for_each(|(participant_id, participant_peer)| {
+                sfu.rooms.lock().await.get(&room_id).unwrap().lock().await.iter().for_each(|(participant_id, participant_peer)| {
                     if session_id != *participant_id {
                         // connect
                         tokio::spawn(async move {
@@ -167,14 +175,14 @@ impl SFU {
             })
         }));
 
-        self
+        peer
     }
     fn accept_offer(&mut self, session_id: String, sdp: RTCSessionDescription) {
 
     }
 
 
-    fn connect_peer(&mut self, src: &Peer, track: Arc<TrackRemote>, dist: &Peer) {
+    async fn connect_peer(&mut self, src: Arc<Peer>, track: Arc<TrackRemote>, dist: &Peer) {
         let local_track = Arc::new(TrackLocalStaticRTP::new(
             track.codec().capability,
             "video".to_owned(),
@@ -182,14 +190,9 @@ impl SFU {
         ));
 
         let local_track2 = Arc::clone(&local_track);
+        dist.rtp_peer.add_track(local_track).await.unwrap();
 
-        let other_session = other_session.unwrap();
-        let other_peer = peers3.get(&other_session).unwrap();
-        other_peer.add_track(local_track).await.unwrap();
-        drop(peers3);
-
-
-        print!("send rtp to {} -> {}", &session_id3, &other_session);
+        // print!("send rtp to {} -> {}", &session_id3, &other_session);
         // Read RTP packets being sent to webrtc-rs
         while let Ok((rtp, _)) = track.read_rtp().await {
             if let Err(err) = local_track2.write_rtp(&rtp).await {
@@ -242,69 +245,15 @@ async fn sdp(
     State(app_state): State<AppState>,
     Json(req): Json<SdpRequest>,
 ) -> impl IntoResponse {
-
-    //app_state.sessions.
-
     app_state.sfu.deref().new_peer(req.session_id, req.room_id).await;
-    //let mut peer_connection = Arc::new(block_on(create_peer()).unwrap());
-    let session_id = req.session_id.clone(); //generate_random_string(5);
+    let session_id = req.session_id.clone();
 
-    if block_on(app_state.peers.lock()).contains_key(&session_id) {
-       peer_connection = block_on(app_state.peers.lock()).get(&session_id).unwrap().clone();
-    } else {
-        // peer_connection.on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-        //     println!("Peer Connection on ice candidate: {:?}", c);
-        //
-        //     Box::pin(async {})
-        // }));
-
-
-        let peers = Arc::clone(&app_state.peers);
-        let conns = Arc::clone(&app_state.conns);
-        let session_id3 = session_id.clone();
-        let peer_connection2 = Arc::clone(&peer_connection);
-        // peer_connection.on_negotiation_needed(Box::new(move || {
-        //     let mut conns1 = block_on(conns.lock());
-        //     let other_conn = conns1.get_mut(&session_id3).unwrap();
-        //     print!("on_negotiation_needed");
-        //
-        //     let sdp = block_on(peer_connection2.create_offer(None)).unwrap();
-        //     block_on(peer_connection2.set_local_description(sdp.clone())).unwrap();
-        //
-        //     block_on(other_conn.send(Message::from(serde_json::to_string(&sdp).unwrap()))).unwrap();
-        //
-        //     Box::pin(async {})
-        // }));
-
-        let session_id2 = session_id.clone();
-
-        let session_id2 = session_id.clone();
-        let peers3 =  Arc::clone(&app_state.peers);
-        let peers4 =  Arc::clone(&app_state.peers);
-        // peer_connection.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-        //     println!("Peer Connection State has changed: {s}");
-        //     match s {
-        //         RTCPeerConnectionState::Closed | RTCPeerConnectionState::Disconnected | RTCPeerConnectionState::Failed => {
-        //             block_on(peers4.lock()).remove(&session_id2);
-        //         },
-        //         _ => {},
-        //     }
-        //     Box::pin(async {})
-        // }));
-
-        peers3.lock().await.insert(session_id.clone(), Arc::clone(&peer_connection));
-    }
-
-    peer_connection.set_remote_description(req.offer).await.unwrap();
-
-    let answer = peer_connection.create_answer(None).await.unwrap();
-
-    let mut gather_complete = peer_connection.gathering_complete_promise().await;
-
-    peer_connection.set_local_description(answer.clone()).await.unwrap();
-
-    let _ = gather_complete.recv().await;
-
+    // peer_connection.set_remote_description(req.offer).await.unwrap();
+    // let answer = peer_connection.create_answer(None).await.unwrap();
+    // let mut gather_complete = peer_connection.gathering_complete_promise().await;
+    // peer_connection.set_local_description(answer.clone()).await.unwrap();
+    // let _ = gather_complete.recv().await;
+    let answer = RTCSessionDescription::default(); // TODO
     serde_json::to_string(&AnswerResponse{answer, session_id: session_id}).unwrap()
 }
 
@@ -345,25 +294,27 @@ async fn ws(
     Query(req): Query<WsRequest>,
     State(app_state): State<AppState>,
 ) -> impl IntoResponse {
-    ws.on_failed_upgrade(async move |mut socket| {
-        app_state.sessions.lock().await.remove(&req.session_id);
-    }).on_upgrade(async move |socket| {
-        let (mut sender, mut receiver) = socket.split();
-        let socket_client: SocketClient = SocketClient::new((sender, receiver));
+    ws
+        .on_failed_upgrade(async move |mut socket| {
+            app_state.sessions.lock().await.remove(&req.session_id);
+        })
+        .on_upgrade(async move |socket| {
+            let (mut sender, mut receiver) = socket.split();
+            let socket_client: SocketClient = SocketClient::new((sender, receiver));
 
-        app_state.sessions.lock().await.insert(req.session_id.clone(), Arc::clone(&socket_client));
+            app_state.sessions.lock().await.insert(req.session_id.clone(), Arc::clone(&socket_client));
 
-        handle_socket(Arc::clone(&app_state.sfu), req.session_id)
-    })
+            handle_socket(Arc::clone(&app_state.sfu), Arc::clone(&app_state.sessions), req.session_id);
+        })
 }
 
-async fn process_message(peers: Arc<Mutex<HashMap<String, Arc<RTCPeerConnection>>>>, msg: Message, session_id: String) -> ControlFlow<(), ()> {
+async fn process_message(sfu: Arc<SFU>, msg: Message, session_id: String, room_id: String) -> ControlFlow<(), ()> {
     match msg {
         Message::Text(t) => {
             let sdp = serde_json::from_str::<RTCSessionDescription>(&t).unwrap();
             if (sdp.sdp_type == RTCSdpType::Answer) {
 
-                let peer_connection = peers.lock().await.get(&session_id).unwrap().clone();
+                let peer_connection = sfu.rooms.lock().await.get(&session_id).unwrap().clone();
 
 
                 peer_connection.set_remote_description(sdp).await.unwrap();
@@ -397,12 +348,14 @@ async fn process_message(peers: Arc<Mutex<HashMap<String, Arc<RTCPeerConnection>
     ControlFlow::Continue(())
 }
 
-async fn handle_socket(mut receiver: Arc<(SplitSink<WebSocket, Message>, SplitStream<WebSocket>)>, session_id: String) {
+async fn handle_socket(sfu: Arc<SFU>, session: Arc<Mutex<HashMap<String, SocketClient>>>, session_id: String, room_id: String) {
+    let socket_client = session.lock().await.get(&session_id).unwrap();
+
+    let sfu = Arc::clone(&sfu);
     tokio::spawn(async move {
-        while let Some(msg) = receiver.next().await {
+        while let Some(msg) = socket_client.1.next().await {
             if let Ok(msg) = msg {
-                let peers = Arc::clone(&peers);
-                if process_message(peers, msg, session_id.clone()).await.is_break() {
+                if process_message(sfu, msg, session_id.clone(), room_id).await.is_break() {
                     return;
                 }
             } else {
