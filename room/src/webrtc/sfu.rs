@@ -69,7 +69,23 @@ struct SFU {
     rooms: Mutex<HashMap<String, Arc<Mutex<HashMap<String, Arc<Peer>>>>>>
 }
 
-impl SFU {
+#[derive(Default)]
+struct SfuService(Arc<(SFU)>);
+
+impl Clone for SfuService {
+    fn clone(&self) -> Self {
+        Self(Arc::clone(&self.0))
+    }
+}
+
+impl Deref for SfuService {
+    type Target = SFU;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl SfuService {
     async fn new_peer(
         &mut self,
         session_id: String,
@@ -120,7 +136,7 @@ impl SFU {
 
         let peer2 = Arc::clone(&peer);
 
-        let sfu = self;
+        let sfu = self.clone();
 
         let room_id = room_id.clone();
         peer.rtp_peer.on_track(Box::new(move |track, r, t| {
@@ -150,11 +166,15 @@ impl SFU {
                     }
                 });
 
-                sfu.rooms.lock().await.get(&room_id).unwrap().lock().await.iter().for_each(|(participant_id, participant_peer)| {
+                let sfu2 = sfu.clone();
+                let rooms = sfu.rooms.lock().await;
+
+                rooms.get(&room_id).unwrap().lock().await.iter().for_each(|(participant_id, participant_peer)| {
                     if session_id != *participant_id {
-                        // connect
+                        let sfu2 = sfu2.clone();
+                        let track = Arc::clone(&track);
                         tokio::spawn(async move {
-                            sfu.connect_peer(peer2, Arc::clone(&track), participant_peer)
+                            sfu2.connect_peer(Arc::clone(&track), participant_peer).await;
                         });
                     }
                 });
@@ -162,7 +182,7 @@ impl SFU {
         }));
 
         let peer2 = Arc::clone(&peer);
-        let sfu = self;
+        let sfu = self.clone();
         peer.rtp_peer.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
             Box::pin(async move {
                 println!("Peer Connection State has changed: {s}");
@@ -182,7 +202,7 @@ impl SFU {
     }
 
 
-    async fn connect_peer(&mut self, src: Arc<Peer>, track: Arc<TrackRemote>, dist: &Peer) {
+    async fn connect_peer(&self, track: Arc<TrackRemote>, dist: &Peer) {
         let local_track = Arc::new(TrackLocalStaticRTP::new(
             track.codec().capability,
             "video".to_owned(),
