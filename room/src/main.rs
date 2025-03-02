@@ -1,5 +1,3 @@
-mod webrtc;
-
 use axum::{
     routing::{get, post},
     http::StatusCode,
@@ -9,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use clap::Parser;
 use futures::TryFutureExt;
 use tracing_subscriber::fmt::format;
-use crate::webrtc::start_webrtc;
+mod webrtc;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -44,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
 
     // build our application with a route
 
-    let app = start_webrtc().await;
+    let app = webrtc::sfu::start_webrtc().await;
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await.unwrap();
     Ok(axum::serve(listener, app).await.unwrap())
     // if args.webrtc {
