@@ -7,7 +7,7 @@ struct Container {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use std::cell::{Ref, RefCell, RefMut};
     use std::fmt;
     use std::rc::Rc;
     use crate::fns::Container;
@@ -57,5 +57,23 @@ mod tests {
         run_callback(Box::new(once_callback));
 
         assert_eq!(container.borrow().name, "test muted once");
+    }
+
+    #[test]
+    fn test_ref() {
+        let container = Rc::new(RefCell::new(Container { name: "test".to_string() }));
+
+
+        let callback = |r: Ref<Container>| {
+            assert_eq!(r.name, "test");
+        };
+
+        callback(container.borrow());
+
+        let callback = |mut r: RefMut<Container>| {
+            r.name = "changed".to_string();
+        };
+        callback(container.borrow_mut());
+        assert_eq!(container.borrow().name, "changed");
     }
 }
