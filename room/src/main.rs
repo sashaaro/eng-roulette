@@ -5,8 +5,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use clap::Parser;
-use futures::TryFutureExt;
-use tracing_subscriber::fmt::format;
 mod webrtc;
 
 /// Simple program to greet a person
@@ -30,7 +28,6 @@ fn app() -> Router {
 
     app
 }
-
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
