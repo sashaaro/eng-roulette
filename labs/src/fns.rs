@@ -9,6 +9,7 @@ struct Container {
 mod tests {
     use std::cell::{Ref, RefCell, RefMut};
     use std::fmt;
+    use std::pin::Pin;
     use std::rc::Rc;
     use crate::fns::Container;
 
@@ -75,5 +76,16 @@ mod tests {
         };
         callback(container.borrow_mut());
         assert_eq!(container.borrow().name, "changed");
+    }
+
+    #[test]
+    fn test_pin()    {
+        let container = Container{name: "test".to_string()};
+        let c = Pin::new(&container);
+
+
+        let callback = move || {
+            assert_eq!(c.name, "test");
+        };
     }
 }

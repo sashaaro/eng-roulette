@@ -34,6 +34,9 @@ pub fn ext_create_timer(a: bool) -> Pin<Box<dyn Future<Output=Box<dyn Any>>>> {
 #[cfg(test)]
 mod tests {
     use std::any::Any;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
     use crate::future::{create_timer, ext_create_timer};
 
     #[test]
@@ -56,8 +59,46 @@ mod tests {
 
     }
 
-    #[test]
-    fn test2() {
 
+
+    struct TracedFuture<T> {
+        wrapped: Pin<Box<dyn Future<Output=T>>>,
+        name: &'static str,
+    }
+
+    impl<T> TracedFuture<T> {
+        fn new(wrapped: Pin<Box<dyn Future<Output=T>>>, name: &'static str) -> TracedFuture<T> {
+            TracedFuture { wrapped, name }
+        }
+    }
+
+    impl<T> Future for TracedFuture<T> {
+        type Output = T;
+
+        fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+            let name = self.name;
+            println!("future '{:?}' poll start", name);
+
+            let this = unsafe { self.get_unchecked_mut() };
+            let result = unsafe { Pin::new_unchecked(&mut this.wrapped) }.poll(_cx);
+
+
+            match result {
+                Poll::Pending => println!("future '{:?}' poll pending", name),
+                Poll::Ready(ref result) => {
+                    println!("future '{:?}' poll ready", name)
+                },
+            }
+
+            result
+        }
+    }
+
+    #[test]
+    fn test_traced_future() {
+        smol::block_on(async {
+            let timer_future  = create_timer();
+            assert_eq!(TracedFuture::new(Box::pin(timer_future), "timer").await, 1);
+        });
     }
 }
