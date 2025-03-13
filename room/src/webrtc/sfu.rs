@@ -12,7 +12,7 @@ use axum::{
 };
 use futures::executor::block_on;
 use futures::stream::{SplitSink, SplitStream};
-use futures::StreamExt;
+use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::ops::{ControlFlow, Deref};
 use tokio::sync::Mutex;
@@ -50,7 +50,7 @@ use webrtc::Error;
 //     random_string
 // }
 
-type SocketClient = Arc<(SplitSink<WebSocket, Message>, Mutex<SplitStream<WebSocket>>)>;
+type SocketClient = (Mutex<SplitSink<WebSocket, Message>>, Mutex<SplitStream<WebSocket>>);
 
 struct Peer {
     session_id: String,
@@ -62,7 +62,7 @@ struct Peer {
 struct SFU {
     rooms: Mutex<HashMap<String, Arc<Mutex<HashMap<String, Arc<Peer>>>>>>,
     peers: Mutex<HashMap<String, Arc<Peer>>>,
-    session: Arc<Mutex<HashMap<String, SocketClient>>>,
+    session: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>,
 }
 
 struct SfuService(Arc<(SFU)>);
@@ -121,23 +121,34 @@ impl SfuService {
 
                 println!("Peer Connection Negotiation needed: {:?}", peer2.rtp_peer);
 
+                let session = Arc::clone(&session);
                 async move {
-                    let sdp = peer2.rtp_peer.create_offer(None).await.unwrap();
+                    let sdp = peer2.rtp_peer.create_offer(None).await;
+                    if sdp.is_err() {
+                        println!("Peer Connection negotiation failed, error: {:?}", sdp.unwrap_err());
+                        return;
+                    }
+                    let sdp = sdp.unwrap();
                     peer2
                         .rtp_peer
                         .set_local_description(sdp.clone())
                         .await
                         .unwrap();
 
-                    let socket_client = session.lock().await.get(peer2.session_id.as_str());
-                    if socket_client.is_some() {
-                        println!("Peer Connection Negotiation needed: {:?}", socket_client);
+                    let binding = session.lock().await;
+                    let socket_client = binding.get(peer2.session_id.as_str());
+                    if socket_client.is_none() {
+                        println!("Peer Connection hasnt socket client");
                         return
                     }
-
-                    let json_msg = Message::from(serde_json::to_string(&sdp).unwrap());
                     let socket_client = socket_client.unwrap();
-                    socket_client.0.send(json_msg).await;
+                    let json = serde_json::to_string(&sdp).unwrap();
+
+                    let result = socket_client.0.lock().await.send(Message::from(json)).await;
+                    if result.is_err() {
+                        println!("Peer Connection negotiation failed, error: {:?}", result.unwrap_err());
+                        return
+                    }
                 }
             })
         }));
@@ -382,7 +393,10 @@ async fn ws(
     })
     .on_upgrade(async move |socket| {
         let (sender, receiver) = socket.split();
-        let socket_client: SocketClient = SocketClient::new((sender, Mutex::new(receiver)));
+        let socket_client: Arc<SocketClient> = Arc::new((
+            Mutex::new(sender),
+            Mutex::new(receiver)
+        ));
 
         app_state
             .sessions
@@ -443,7 +457,7 @@ async fn process_message(
 async fn handle_socket(
     sfu: SfuService,
     session_id: String,
-    socket_client: Weak<(SplitSink<WebSocket, Message>, Mutex<SplitStream<WebSocket>>)>,
+    socket_client: Weak<SocketClient>,
 ) {
     let sfu = sfu.clone();
 
@@ -480,7 +494,7 @@ async fn handle_socket(
 
 #[derive(Clone)]
 struct AppState {
-    sessions: Arc<Mutex<HashMap<String, SocketClient>>>,
+    sessions: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>,
     sfu: SfuService,
 }
 
