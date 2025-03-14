@@ -18,7 +18,6 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use crate::webrtc::sfu::{Signalling, SFU};
 use crate::webrtc::types::{AnswerResponse, CandidatesRequest};
 use futures::{SinkExt, StreamExt};
-use rand::distributions::WeightedError;
 
 pub(crate) type SocketClient = (Mutex<SplitSink<WebSocket, Message>>, Mutex<SplitStream<WebSocket>>);
 
@@ -57,7 +56,7 @@ impl Signalling for WebsocketSignalling {
     }
 }
 
-pub async fn start_webrtc() -> Router {
+pub async fn create_sfu_router() -> Router {
     let sessions = Arc::new(Mutex::new(HashMap::new()));
 
     let signalling = Box::new(WebsocketSignalling::new(
@@ -70,7 +69,7 @@ pub async fn start_webrtc() -> Router {
 
     let app = Router::new()
         .route("/ws", any(ws))
-        .route("/sdp", post(sdp))
+        .route("/accept-offer", post(accept_offer))
         .route("/candidates", post(candidates))
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -201,31 +200,22 @@ async fn process_message(
 }
 
 #[derive(Deserialize, Serialize)]
-struct SdpRequest {
+struct AcceptOfferReq {
     offer: RTCSessionDescription,
     session_id: String,
     room_id: String,
 }
 
 
-async fn sdp(State(app_state): State<AppState>, Json(req): Json<SdpRequest>) -> impl IntoResponse {
-    let sfu = &app_state.sfu.clone();
-    let peer = sfu.new_peer(req.session_id, req.room_id).await;
-
-    peer.rtp_peer.set_remote_description(req.offer).await.unwrap();
-    let answer = peer.rtp_peer.create_answer(None).await.unwrap();
-    let mut gather_complete = peer.rtp_peer.gathering_complete_promise().await;
-    peer.rtp_peer.set_local_description(answer.clone()).await.unwrap();
-    let _ = gather_complete.recv().await;
+async fn accept_offer(State(app_state): State<AppState>, Json(req): Json<AcceptOfferReq>) -> impl IntoResponse {
+    let answer = app_state.sfu.accept_offer(req.session_id.clone(), req.offer, req.room_id).await;
 
     serde_json::to_string(&AnswerResponse {
         answer,
-        session_id: peer.session_id.clone(),
+        session_id: req.session_id,
     })
         .unwrap()
 }
-
-
 
 async fn candidates(
     State(app_state): State<AppState>,

@@ -249,7 +249,19 @@ impl SFU {
 
     fn on_pear_track() {}
 
-    //fn accept_offer(&mut self, session_id: String, sdp: RTCSessionDescription) {}
+    pub fn accept_offer(&self, session_id: String, offer: RTCSessionDescription, room_id: String) -> Pin<Box<dyn Future<Output = RTCSessionDescription> + Send + '_>> {
+        Box::pin(async {
+            let peer = self.new_peer(session_id, room_id).await;
+            peer.rtp_peer.set_remote_description(offer).await.unwrap();
+            let answer = peer.rtp_peer.create_answer(None).await.unwrap();
+
+            let mut gather_complete = peer.rtp_peer.gathering_complete_promise().await;
+            peer.rtp_peer.set_local_description(answer.clone()).await.unwrap();
+            let _ = gather_complete.recv().await;
+
+            answer
+        })
+    }
 
     async fn send_remote_track(&self, track: Arc<TrackRemote>, dist: &Peer) {
         let local_track = Arc::new(TrackLocalStaticRTP::new(
