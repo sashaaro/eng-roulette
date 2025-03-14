@@ -13,14 +13,10 @@ use axum::{
 use futures::executor::block_on;
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
-use std::ops::{ControlFlow, Deref};
+use std::ops::{Deref};
 use std::pin::Pin;
-use futures::channel::mpsc::Receiver;
 use tokio::sync::Mutex;
-use tokio::sync::oneshot::channel;
 use tokio::time::Duration;
-use tower_http::cors::CorsLayer;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
@@ -155,10 +151,9 @@ impl SFU {
         let peer2 = Arc::clone(&peer);
         let sfu = self.clone();
 
-        block_on(sfu.peers.lock()).insert(peer2.session_id.clone(), Arc::clone(&peer2));
+        sfu.peers.lock().await.insert(peer2.session_id.clone(), Arc::clone(&peer2));
 
         Arc::clone(&peer).rtp_peer.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-
             println!("Peer Connection State has changed: {s}");
             match s {
                 RTCPeerConnectionState::Closed
@@ -176,69 +171,79 @@ impl SFU {
         ));
 
 
-        let sfu = self.clone();
+        let this = self.clone();
         let room_id = room_id.clone();
 
         let o_peer = Arc::clone(&peer);
         let peer = Arc::clone(&peer);
         Arc::clone(&peer).rtp_peer.on_track(Box::new(move |track, _, _| {
-            let weak_peer = Arc::downgrade(&peer);
 
-            let room_id = room_id.clone();
-            // peer2.local_tracks.insert(session_id.clone(), track.clone());
-            let media_ssrc = track.ssrc();
-            tokio::spawn(async move {
-                let mut result = Result::<usize>::Ok(0);
-                while result.is_ok() {
-                    let timeout = tokio::time::sleep(Duration::from_secs(3));
-                    tokio::pin!(timeout);
-
-                    tokio::select! {
-                        _ = timeout.as_mut() =>{
-                            if let Some(pc) = weak_peer.upgrade(){
-                                result = pc.rtp_peer.write_rtcp(&[Box::new(PictureLossIndication{
-                                    sender_ssrc: 0,
-                                    media_ssrc,
-                                })]).await.map_err(Into::into);
-                            }else{
-                                break;
-                            }
-                        }
-                    }
-                }
-            });
-
-            let sfu2 = sfu.clone();
-            // broadcast all participants
+            let this = this.clone(); // TODO
             let peer = Arc::clone(&peer);
-            tokio::spawn(async move {
-                let sfu3 = sfu2.clone();
-                let rooms = sfu2.rooms.lock().await;
-
-                let room = rooms.get(&room_id);
-                if room.is_none() {
-                    println!("No room found for this session");
-                    return;
-                }
-                let room = room.unwrap();
-
-                let room = Arc::clone(&room);
-                let participants = room.lock().await.clone().into_iter()
-                    .filter(|(_, participant)| participant.session_id != peer.session_id);
-
-                participants.for_each(|(_, participant)| {
-                    let sfu3 = sfu3.clone();
-                    let track = Arc::clone(&track);
-                    tokio::spawn(async move {
-                        sfu3.send_remote_track(track, &participant).await;
-                    });
-                });
-            });
-
-            Box::pin(async {})
+            let room_id = room_id.clone();
+            Box::pin(async move {
+                this.on_track(Arc::downgrade(&peer), room_id, track).await;
+            })
         }));
 
         Arc::clone(&o_peer)
+    }
+
+    async fn on_track(&self, peer: Weak<Peer>, room_id: String, new_track: Arc<TrackRemote>) {
+        let rooms = self.rooms.lock().await;
+        let room = rooms.get(&room_id);
+        if room.is_none() {
+            println!("No room found for this session");
+            return;
+        }
+        let room = room.unwrap();
+
+        let room_id = room_id.clone();
+        let media_ssrc = new_track.ssrc();
+        let peer2 = peer.clone();
+        tokio::spawn(async move {
+            let mut result = Result::<usize>::Ok(0);
+            while result.is_ok() {
+                let timeout = tokio::time::sleep(Duration::from_secs(3));
+                tokio::pin!(timeout);
+
+                tokio::select! {
+                    _ = timeout.as_mut() =>{
+                        if let Some(pc) = peer.upgrade(){
+                            result = pc.rtp_peer.write_rtcp(&[Box::new(PictureLossIndication{
+                                sender_ssrc: 0,
+                                media_ssrc,
+                            })]).await.map_err(Into::into);
+                        } else {
+                            break; // safe exit
+                        }
+                    }
+                }
+            }
+        });
+
+        let this = self.clone();
+
+        let p = peer2.clone().upgrade();
+        if p.is_none() {
+            return;
+        }
+
+        let session_id = p.unwrap().session_id.clone();
+
+        let participants = room.lock().await.clone().into_iter()
+            .filter(move |(_, participant)| participant.session_id != session_id);
+
+        tokio::spawn(async move {
+            participants.for_each(|(_, participant)| {
+                let new_track = Arc::clone(&new_track);
+                let participant = Arc::clone(&participant);
+                let this = this.clone();
+                tokio::spawn(async move {
+                    this.send_track_to_participant(new_track, participant).await;
+                });
+            });
+        });
     }
 
     pub async fn accept_offer(&self, session_id: String, offer: RTCSessionDescription, room_id: String) -> RTCSessionDescription {
@@ -273,20 +278,20 @@ impl SFU {
         peer.unwrap().rtp_peer.add_ice_candidate(candidate).await; // TODO error handling
     }
 
-    async fn send_remote_track(&self, track: Arc<TrackRemote>, dist: &Peer) {
-        let local_track = Arc::new(TrackLocalStaticRTP::new(
+    async fn send_track_to_participant(&self, track: Arc<TrackRemote>, dist: Arc<Peer>) {
+        let dist_track = Arc::new(TrackLocalStaticRTP::new(
             track.codec().capability,
             "video".to_owned(),
             "webrtc-rs".to_owned(),
         ));
 
-        let local_track2 = Arc::clone(&local_track);
-        dist.rtp_peer.add_track(local_track).await.unwrap();
+        let dist_track2 = Arc::clone(&dist_track);
+        dist.rtp_peer.add_track(dist_track2).await.unwrap();
 
         // print!("send rtp to {} -> {}", &session_id3, &other_session);
         // Read RTP packets being sent to webrtc-rs
         while let Ok((rtp, _)) = track.read_rtp().await {
-            if let Err(err) = local_track2.write_rtp(&rtp).await {
+            if let Err(err) = dist_track.write_rtp(&rtp).await {
                 if Error::ErrClosedPipe != err {
                     print!("output track write_rtp got error: {err} and break");
                     break;
