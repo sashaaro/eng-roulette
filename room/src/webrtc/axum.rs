@@ -18,6 +18,7 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use crate::webrtc::sfu::{Signalling, SFU};
 use crate::webrtc::types::{AnswerResponse, CandidatesRequest};
 use futures::{SinkExt, StreamExt};
+use rand::distributions::WeightedError;
 
 pub(crate) type SocketClient = (Mutex<SplitSink<WebSocket, Message>>, Mutex<SplitStream<WebSocket>>);
 
@@ -29,19 +30,39 @@ pub struct AppState {
 
 
 struct WebsocketSignalling {
+    sessions: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>
+}
 
+impl WebsocketSignalling {
+    fn new(sessions: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>) -> Self {
+        Self {
+            sessions,
+        }
+    }
 }
 
 impl Signalling for WebsocketSignalling {
-    fn send_sdp(&self, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output=()> + Send + '_>> {
-        todo!()
+    fn send_sdp(&self, session_id: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output=()> + Send + '_>> {
+        Box::pin(async move {
+            let sessions = self.sessions.lock().await;
+            let session = sessions.get(&session_id);
+            if session.is_none() {
+                println!("session not found: {}", session_id); // todo log
+            } else {
+                let session = session.unwrap();
+                let playground = serde_json::to_string(&sdp).unwrap(); // TODO
+                session.0.lock().await.send(Message::from(playground)).await.unwrap();// TODO
+            }
+        })
     }
 }
 
 pub async fn start_webrtc() -> Router {
     let sessions = Arc::new(Mutex::new(HashMap::new()));
 
-    let signalling = Box::new(WebsocketSignalling{});
+    let signalling = Box::new(WebsocketSignalling::new(
+        Arc::clone(&sessions),
+    ));
     let state = AppState {
         sfu: SFU::new(signalling),
         sessions: Arc::clone(&sessions),

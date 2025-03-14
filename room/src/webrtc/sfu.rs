@@ -59,7 +59,7 @@ pub struct SFUInner {
 pub struct SFU(Arc<(SFUInner)>);
 
 pub trait Signalling: Sync + Send {
-    fn send_sdp(&self, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+    fn send_sdp(&self, string: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }
 
 impl SFU {
@@ -151,22 +151,7 @@ impl SFU {
                         .await
                         .unwrap();
 
-                    // let binding = session.lock().await;
-                    // let socket_client = binding.get(peer2.session_id.as_str());
-                    // if socket_client.is_none() {
-                    //     println!("Peer Connection hasnt socket client");
-                    //     return
-                    // }
-                    // let socket_client = socket_client.unwrap();
-                    // let json = serde_json::to_string(&sdp).unwrap();
-                    //
-                    // let result = socket_client.0.lock().await.send(Message::from(json)).await;
-                    // if result.is_err() {
-                    //     println!("Peer Connection negotiation failed, error: {:?}", result.unwrap_err());
-                    //     return
-                    // }
-
-                    this.signalling.send_sdp(sdp).await;
+                    this.signalling.send_sdp(peer2.session_id.clone(), sdp).await;
                 }
             })
         }));
