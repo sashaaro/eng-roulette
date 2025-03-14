@@ -70,6 +70,7 @@ pub async fn create_sfu_router() -> Router {
     let app = Router::new()
         .route("/ws", any(ws))
         .route("/accept-offer", post(accept_offer))
+        .route("/accept-answer", post(accept_answer))
         .route("/candidate", post(candidate))
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -167,7 +168,6 @@ async fn process_message(
             if (sdp.sdp_type == RTCSdpType::Answer) {
                 let peer_connection = sfu.peers.lock().await.get(&session_id).unwrap().clone();
 
-                peer_connection.rtp_peer.set_remote_description(sdp).await.unwrap();
             }
         }
         Message::Binary(d) => {
@@ -215,11 +215,23 @@ struct AnswerResponse {
 async fn accept_offer(State(app_state): State<AppState>, Json(req): Json<AcceptOfferReq>) -> impl IntoResponse {
     let answer = app_state.sfu.accept_offer(req.session_id.clone(), req.offer, req.room_id).await;
 
-    serde_json::to_string(&AnswerResponse {
+    Json(AnswerResponse {
         answer,
         session_id: req.session_id,
     })
-        .unwrap()
+}
+
+#[derive(Deserialize, Serialize)]
+struct AcceptAnswerReq {
+    answer: RTCSessionDescription,
+    session_id: String,
+    room_id: String,
+}
+
+async fn accept_answer(State(app_state): State<AppState>, Json(req): Json<AcceptAnswerReq>) -> impl IntoResponse {
+    app_state.sfu.accept_answer(req.session_id.clone(), req.answer, req.room_id).await;
+
+    "ok"
 }
 
 #[derive(Deserialize, Serialize)]

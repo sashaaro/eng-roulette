@@ -253,6 +253,16 @@ impl SFU {
         answer
     }
 
+    pub(crate) async fn accept_answer(&self, session_id: String, answer: RTCSessionDescription, room_id: String) {
+        let peer = self.get_peer(session_id).await;
+        if peer.is_none() {
+            println!("No peer found for this session"); // TODO error
+            return;
+        }
+
+        peer.unwrap().rtp_peer.set_remote_description(answer).await.unwrap();
+    }
+
     pub async fn accept_candidate(&self, session_id: String, candidate: RTCIceCandidateInit) -> () {
         let peer = self.get_peer(session_id).await;
         if peer.is_none() {
