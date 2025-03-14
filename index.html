@@ -68,7 +68,7 @@ Logs<br />
         pc.createOffer()
             .then(offer => {
                 pc.setLocalDescription(offer)
-                fetch("http://localhost:8080/sdp", {method: "post",
+                fetch("http://localhost:8080/accept-offer", {method: "post",
                     body: JSON.stringify({offer, session_id, room_id: document.querySelector("#room").value}),
                     headers: {
                         "Content-Type": "application/json"
@@ -78,25 +78,6 @@ Logs<br />
                         console.log(resp)
                         //session_id = resp.session_id
                         pc.setRemoteDescription(resp.answer)
-
-                        setTimeout(() => {
-                            console.log(candidates)
-
-
-
-                            fetch("http://localhost:8080/candidates", {method: "post",
-                                body: JSON.stringify({candidates, session_id}),
-                                headers: {
-                                    "Content-Type": "application/json"
-                                }})
-                                // .then(res => res.json())
-                                .then(resp => {
-
-                                })
-
-
-
-                        }, 2000)
                     })
             })
             .catch(log)
@@ -120,13 +101,15 @@ Logs<br />
         pc.oniceconnectionstatechange = e => log(pc.iceConnectionState)
 
         pc.onicecandidate = event => {
-            //console.log(event);
-            if (event.candidate === null) {
-                console.log(event.candidate)
-                // push candidates
-            } else {
-                candidates.push(event.candidate)
-            }
+            fetch("http://localhost:8080/candidate", {method: "post",
+                body: JSON.stringify({candidate: event.candidate, session_id}),
+                headers: {
+                    "Content-Type": "application/json"
+                }})
+                // .then(res => res.json())
+                .then(resp => {
+
+                })
         }
 
 

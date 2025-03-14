@@ -16,8 +16,8 @@ use tower_http::cors::CorsLayer;
 use webrtc::peer_connection::sdp::sdp_type::RTCSdpType;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use crate::webrtc::sfu::{Signalling, SFU};
-use crate::webrtc::types::{AnswerResponse, CandidatesRequest};
 use futures::{SinkExt, StreamExt};
+use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
 
 pub(crate) type SocketClient = (Mutex<SplitSink<WebSocket, Message>>, Mutex<SplitStream<WebSocket>>);
 
@@ -70,7 +70,7 @@ pub async fn create_sfu_router() -> Router {
     let app = Router::new()
         .route("/ws", any(ws))
         .route("/accept-offer", post(accept_offer))
-        .route("/candidates", post(candidates))
+        .route("/candidate", post(candidate))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -81,7 +81,6 @@ pub async fn create_sfu_router() -> Router {
 struct WsRequest {
     session_id: String,
 }
-
 
 async fn ws(
     ws: WebSocketUpgrade,
@@ -207,6 +206,12 @@ struct AcceptOfferReq {
 }
 
 
+#[derive(Deserialize, Serialize)]
+struct AnswerResponse {
+    answer: RTCSessionDescription,
+    session_id: String,
+}
+
 async fn accept_offer(State(app_state): State<AppState>, Json(req): Json<AcceptOfferReq>) -> impl IntoResponse {
     let answer = app_state.sfu.accept_offer(req.session_id.clone(), req.offer, req.room_id).await;
 
@@ -217,50 +222,21 @@ async fn accept_offer(State(app_state): State<AppState>, Json(req): Json<AcceptO
         .unwrap()
 }
 
-async fn candidates(
+#[derive(Deserialize, Serialize)]
+struct CandidateRequest {
+    candidate: RTCIceCandidateInit,
+    session_id: String,
+}
+
+async fn candidate(
     State(app_state): State<AppState>,
-    Json(candidates_req): Json<CandidatesRequest>,
+    Json(req): Json<CandidateRequest>,
 ) -> impl IntoResponse {
-    if candidates_req.candidates.len() == 0 {
+    if req.session_id.clone().len() == 0 {
         return "invalid candidates";
     }
 
-    if candidates_req.session_id.len() == 0 {
-        return "invalid candidates";
-    }
-
-    let sessions = Arc::clone(&app_state.sessions);
-    let sessions = sessions.lock().await;
-    let socket_client = sessions.get(&candidates_req.session_id);
-
-    if socket_client.is_none() {
-        return "";
-    }
-
-    let sfu = app_state.sfu.clone();
-    let peers = sfu.peers.lock().await;
-    let peer = peers.get(&candidates_req.session_id);
-
-    if peer.is_none() {
-        return "no peer";
-    }
-    let peer = peer.unwrap();
-
-    // let peer_connection = app_state
-    //     .sessions
-    //     .lock()
-    //     .await
-    //     .get(&candidates_req.session_id)
-    //     .unwrap()
-    //     .clone();
-
-    let peer = Arc::clone(&peer);
-    candidates_req
-        .candidates
-        .iter()
-        .for_each(|c| {
-            block_on(peer.rtp_peer.add_ice_candidate(c.clone())).unwrap()
-        });
+    app_state.sfu.accept_candidate(req.session_id, req.candidate).await;
 
     "ok"
 }

@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, Weak};
 
-use crate::webrtc::types::{AnswerResponse, CandidatesRequest};
 use anyhow::Result;
 use axum::extract::{Query, State};
 use axum::response::IntoResponse;
@@ -25,12 +24,11 @@ use tower_http::cors::CorsLayer;
 use webrtc::api::interceptor_registry::register_default_interceptors;
 use webrtc::api::media_engine::MediaEngine;
 use webrtc::api::APIBuilder;
-use webrtc::ice_transport::ice_candidate::RTCIceCandidate;
+use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
-use webrtc::peer_connection::sdp::sdp_type::RTCSdpType;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
@@ -38,7 +36,6 @@ use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::TrackLocalWriter;
 use webrtc::track::track_remote::TrackRemote;
 use webrtc::Error;
-
 
 pub struct Peer {
     pub session_id: String,
@@ -63,20 +60,13 @@ pub trait Signalling: Sync + Send {
 }
 
 impl SFU {
-    pub fn new(
-        signalling: Box<dyn Signalling>,
-        //session: Arc<Mutex<HashMap<String, Arc<()>>>>
-    ) -> Self {
+    pub fn new(signalling: Box<dyn Signalling>) -> Self {
         let inner = Arc::new(SFUInner{
             signalling,
             peers: Default::default(),
             rooms: Default::default(),
         });
-        let sfu: Self = Self(inner);
-
-        //channel();
-
-        sfu
+        Self(inner)
     }
 }
 
@@ -94,7 +84,11 @@ impl Deref for SFU {
 }
 
 impl SFU {
-    pub async fn new_peer(&self, session_id: String, room_id: String) -> Arc<Peer> {
+    async fn get_peer(&self, session_id: String) -> Option<Arc<Peer>> {
+        self.peers.lock().await.get(&session_id).map(|peer| peer.clone())
+    }
+
+    async fn new_peer(&self, session_id: String, room_id: String) -> Arc<Peer> {
         let mut rooms = self.rooms.lock().await;
         if !rooms.contains_key(&room_id) {
             rooms.insert(room_id.clone(), Default::default());
@@ -247,20 +241,26 @@ impl SFU {
         Arc::clone(&o_peer)
     }
 
-    fn on_pear_track() {}
+    pub async fn accept_offer(&self, session_id: String, offer: RTCSessionDescription, room_id: String) -> RTCSessionDescription {
+        let peer = self.new_peer(session_id, room_id).await;
+        peer.rtp_peer.set_remote_description(offer).await.unwrap();
+        let answer = peer.rtp_peer.create_answer(None).await.unwrap();
 
-    pub fn accept_offer(&self, session_id: String, offer: RTCSessionDescription, room_id: String) -> Pin<Box<dyn Future<Output = RTCSessionDescription> + Send + '_>> {
-        Box::pin(async {
-            let peer = self.new_peer(session_id, room_id).await;
-            peer.rtp_peer.set_remote_description(offer).await.unwrap();
-            let answer = peer.rtp_peer.create_answer(None).await.unwrap();
+        let mut gather_complete = peer.rtp_peer.gathering_complete_promise().await;
+        peer.rtp_peer.set_local_description(answer.clone()).await.unwrap();
+        let _ = gather_complete.recv().await;
 
-            let mut gather_complete = peer.rtp_peer.gathering_complete_promise().await;
-            peer.rtp_peer.set_local_description(answer.clone()).await.unwrap();
-            let _ = gather_complete.recv().await;
+        answer
+    }
 
-            answer
-        })
+    pub async fn accept_candidate(&self, session_id: String, candidate: RTCIceCandidateInit) -> () {
+        let peer = self.get_peer(session_id).await;
+        if peer.is_none() {
+            println!("No peer found for this session"); // TODO error
+            return;
+        }
+
+        peer.unwrap().rtp_peer.add_ice_candidate(candidate).await; // TODO error handling
     }
 
     async fn send_remote_track(&self, track: Arc<TrackRemote>, dist: &Peer) {
