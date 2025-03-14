@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
 
     // build our application with a route
 
-    let app = webrtc::sfu::start_webrtc().await;
+    let app = webrtc::axum::start_webrtc().await;
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await.unwrap();
     Ok(axum::serve(listener, app).await.unwrap())
     // if args.webrtc {
