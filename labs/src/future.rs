@@ -1,9 +1,11 @@
 use std::any::Any;
 use std::future::Future;
+use std::hash::Hash;
 use std::pin::Pin;
+use std::thread;
 use std::time::Duration;
-use smol::{io};
 use async_io::Timer;
+use smol::stream::Stream;
 
 pub fn create_timer() -> impl Future<Output = i32> {
     async {
@@ -31,13 +33,25 @@ pub fn ext_create_timer(a: bool) -> Pin<Box<dyn Future<Output=Box<dyn Any>>>> {
     }
 }
 
+pub fn run_thread<F: FnOnce() -> T + Send + 'static, T: Send + 'static>(callback: F) {
+    thread::spawn(callback);
+}
+
+// + 'static говорит, что объект не содержит ссылок с ограниченным временем жизни и может существовать сколько угодно долго.
+pub fn my_spawn<F, T>(f: F) where
+    F: FnOnce() -> T,
+    F: Send + 'static,
+    T: Send + 'static, {
+    thread::spawn(f);
+}
+
 #[cfg(test)]
 mod tests {
-    use std::any::Any;
     use std::future::Future;
     use std::pin::Pin;
+    use std::sync::Arc;
     use std::task::{Context, Poll};
-    use crate::future::{create_timer, ext_create_timer};
+    use crate::future::{create_timer, ext_create_timer, my_spawn, run_thread};
 
     #[test]
     fn test_create_timer() {
@@ -101,4 +115,33 @@ mod tests {
             assert_eq!(TracedFuture::new(Box::pin(timer_future), "timer").await, 1);
         });
     }
+
+
+    struct Container<'a> {
+        str: &'a str,
+    }
+    #[test]
+    fn test_static() {
+        let c = Container{str: "Hi"};
+        let callback = || -> String {
+            return c.str.to_string()
+        };
+        my_spawn(callback);
+
+        let s = "Hi";
+        // let s = &String::from("Hi"); // temporary value dropped while borrowed
+        let c = Container{str: &s};
+        let callback = || -> String {
+            return s.to_string()
+        };
+        run_thread(callback);
+
+        // let c = Arc::new(Container{str: &s});
+        // let callback = || -> String {
+        //     return s.to_string()
+        // };
+        // run_thread(callback)
+    }
+
+
 }

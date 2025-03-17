@@ -2,8 +2,7 @@
 mod future;
 mod fns;
 mod experiments;
-
-use smol::{io, net, prelude::*, Unblock};
+mod pin;
 
 fn main() {
     smol::block_on(async {

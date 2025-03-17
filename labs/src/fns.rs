@@ -8,7 +8,6 @@ struct Container {
 #[cfg(test)]
 mod tests {
     use std::cell::{Ref, RefCell, RefMut};
-    use std::fmt;
     use std::pin::Pin;
     use std::rc::Rc;
     use crate::fns::Container;
@@ -46,7 +45,7 @@ mod tests {
 
         let container = Rc::new(RefCell::new(container.clone()));
 
-        let mut c =  Rc::clone(&container);
+        let c =  Rc::clone(&container);
         let once_callback = move || { // FnOnce
            c.borrow_mut().name.push_str(" once");
         };
