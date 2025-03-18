@@ -2,16 +2,8 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::sync::{Arc, Weak};
 
-use anyhow::Result;
-use axum::extract::{Query, State};
-use axum::response::IntoResponse;
-use axum::routing::{any, post};
-use axum::{
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    Json, Router,
-};
+use anyhow::{bail, Result};
 use futures::executor::block_on;
-use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use std::ops::{Deref};
 use std::pin::Pin;
@@ -34,16 +26,16 @@ use webrtc::track::track_remote::TrackRemote;
 use webrtc::Error;
 
 pub struct Peer {
-    pub session_id: String,
+    pub(crate) session_id: String,
     pub(crate) rtp_peer: RTCPeerConnection,
-    pub remote_tracks: Vec<TrackRemote>,
-    //local_tracks: Vec<Box<dyn TrackLocal>>,
 }
 
 
 pub struct SFUInner {
     rooms: Mutex<HashMap<String, Arc<Mutex<HashMap<String, Arc<Peer>>>>>>,
     pub(crate) peers: Mutex<HashMap<String, Arc<Peer>>>,
+    pub(crate) remote_tracks: Mutex<HashMap<String, Weak<TrackRemote>>>,
+
     //session: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>,
     signalling: Box<dyn Signalling>
 }
@@ -52,17 +44,18 @@ pub struct SFUInner {
 pub struct SFU(Arc<(SFUInner)>);
 
 pub trait Signalling: Sync + Send {
-    fn send_sdp(&self, string: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+    fn send_sdp(&self, string: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
+    fn send_ice_candidate(&self, session_id: String, candidate: Option<RTCIceCandidate>) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
 }
 
 impl SFU {
     pub fn new(signalling: Box<dyn Signalling>) -> Self {
-        let inner = Arc::new(SFUInner{
+        SFU(Arc::new(SFUInner{
             signalling,
             peers: Default::default(),
             rooms: Default::default(),
-        });
-        Self(inner)
+            remote_tracks: Default::default(),
+        }))
     }
 }
 
@@ -84,64 +77,65 @@ impl SFU {
         self.peers.lock().await.get(&session_id).map(|peer| peer.clone())
     }
 
-    async fn new_peer(&self, session_id: String, room_id: String) -> Arc<Peer> {
+    async fn get_or_create_room(&self, room_id: String) -> Arc<Mutex<HashMap<String, Arc<Peer>>>> {
         let mut rooms = self.rooms.lock().await;
         if !rooms.contains_key(&room_id) {
             rooms.insert(room_id.clone(), Default::default());
         }
-        let room = rooms.get(&room_id).unwrap();
+        rooms.get(&room_id).unwrap().clone()
+    }
 
-        let mut room = room.lock().await;
+    async fn get_or_create_peer(&self, session_id: String, room_id: String) -> Result<Arc<Peer>> {
+        let room = self.get_or_create_room(room_id.clone()).await;
+        let mut room_map = room.lock().await;
 
         let mut peer: Arc<Peer>;
-        if room.contains_key(&session_id) {
-            peer = room.get(&session_id).unwrap().clone();
-
-            return peer;
+        if room_map.contains_key(&session_id) {
+            return match room_map.get(&session_id) {
+                Some(peer) => Ok(peer.clone()),
+                None => anyhow::bail!("Could not find peer {}", session_id)
+            }
         }
 
         peer = Arc::new(Peer {
             session_id: session_id.clone(),
-            rtp_peer: create_peer().await.unwrap(),
-            remote_tracks: vec![],
-            //local_tracks: vec![],
+            rtp_peer: create_peer(session_id.clone()).await?,
         });
 
-        room.insert(peer.session_id.clone(), Arc::clone(&peer));
+        room_map.insert(peer.session_id.clone(), Arc::clone(&peer));
+        drop(room_map);
 
+        let this = self.clone();
+        let peer2 = Arc::clone(&peer);
         peer.rtp_peer
             .on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-                println!("Peer Connection on ice candidate: {:?}", c);
+                let peer2 = Arc::clone(&peer2);
+                let this = this.clone();
 
-                Box::pin(async {})
+                println!("Peer Connection on ice candidate: {:?}", c);
+                Box::pin(async move {
+                    this.signalling.send_ice_candidate(peer2.session_id.clone(), c).await;
+                })
             }));
 
         let peer2 = Arc::clone(&peer);
-        //let session = Arc::clone(&self.session);
 
         let this = self.clone();
         peer.rtp_peer.on_negotiation_needed(Box::new(move || {
             Box::pin({
                 let peer2 = Arc::clone(&peer2);
-
-                println!("Peer Connection Negotiation needed: {:?}", peer2.rtp_peer);
-
-          //      let session = Arc::clone(&session);
+                let peer3 = Arc::clone(&peer2);
                 let this = this.clone();
-                async move {
-                    let sdp = peer2.rtp_peer.create_offer(None).await;
-                    if sdp.is_err() {
-                        println!("Peer Connection negotiation failed, error: {:?}", sdp.unwrap_err());
-                        return;
-                    }
-                    let sdp = sdp.unwrap();
-                    peer2
-                        .rtp_peer
-                        .set_local_description(sdp.clone())
-                        .await
-                        .unwrap();
 
-                    this.signalling.send_sdp(peer2.session_id.clone(), sdp).await;
+                async move {
+                    println!("Peer Connection {:?} Negotiation needed", peer2.session_id);
+
+                    match this.on_negotiation_needed(peer2).await {
+                        Err(e) => {
+                            println!("negotiation needed error: {:?} {:?}", e, peer3.session_id);
+                        },
+                        _ => {}
+                    };
                 }
             })
         }));
@@ -149,26 +143,42 @@ impl SFU {
 
         // let peer2 = Arc::clone(&peer);
         let peer2 = Arc::clone(&peer);
-        let sfu = self.clone();
+        self.clone().peers.lock().await.insert(peer2.session_id.clone(), Arc::clone(&peer2));
 
-        sfu.peers.lock().await.insert(peer2.session_id.clone(), Arc::clone(&peer2));
-
+        let this = self.clone();
+        let room2 = Arc::clone(&room);
         Arc::clone(&peer).rtp_peer.on_peer_connection_state_change(Box::new(move |s: RTCPeerConnectionState| {
-            println!("Peer Connection State has changed: {s}");
-            match s {
-                RTCPeerConnectionState::Closed
-                | RTCPeerConnectionState::Disconnected
-                | RTCPeerConnectionState::Failed => {
-                    block_on(sfu.rooms.lock()).remove(peer2.session_id.as_str());
-                    block_on(sfu.peers.lock()).remove(peer2.session_id.as_str());
+            let peer2 = Arc::clone(&peer2);
+            let room = Arc::clone(&room2);
+            let this = this.clone();
+            Box::pin(async move {
+                println!("Peer {:?} Connection State has changed: {:?}", peer2.session_id, s);
+                match s {
+                    RTCPeerConnectionState::Closed
+                    | RTCPeerConnectionState::Disconnected
+                    | RTCPeerConnectionState::Failed => {
+                        match room.lock().await.remove(peer2.session_id.as_str()) {
+                            None => println!("not found session_id in room"),
+                            _ => {}
+                        }
+                        match this.peers.lock().await.remove(peer2.session_id.as_str()) {
+                            None => println!("not found session_id in peers"),
+                            _ => {}
+                        }
+
+                        let mut remote_tracks = this.remote_tracks.lock().await;
+                        remote_tracks.remove(&peer2.session_id);
+
+                        println!("peers in room {:?}", room.lock().await.len());
+                        println!("peers {:?}", this.peers.lock().await.len());
+                        println!("tracks {:?}", remote_tracks.len());
+                    }
+                    RTCPeerConnectionState::Connected => {
+                    }
+                    _ => {}
                 }
-                RTCPeerConnectionState::New => {
-                }
-                _ => {}
-            }
-            Box::pin(async {})
-        },
-        ));
+            })
+        }));
 
 
         let this = self.clone();
@@ -176,17 +186,30 @@ impl SFU {
 
         let o_peer = Arc::clone(&peer);
         let peer = Arc::clone(&peer);
+        let room2 = Arc::clone(&room);
         Arc::clone(&peer).rtp_peer.on_track(Box::new(move |track, _, _| {
-
             let this = this.clone(); // TODO
             let peer = Arc::clone(&peer);
             let room_id = room_id.clone();
+            let room = Arc::clone(&room2);
             Box::pin(async move {
                 this.on_track(Arc::downgrade(&peer), room_id, track).await;
+
+                this.on_connected(Arc::clone(&peer), room).await;
             })
         }));
 
-        Arc::clone(&o_peer)
+        Ok(Arc::clone(&o_peer))
+    }
+
+    async fn on_negotiation_needed(&self, peer: Arc<Peer>) -> Result<()> {
+        let sdp = peer.rtp_peer.create_offer(None).await?;
+        peer
+            .rtp_peer
+            .set_local_description(sdp.clone())
+            .await?;
+
+        self.signalling.send_sdp(peer.session_id.clone(), sdp).await
     }
 
     async fn on_track(&self, peer: Weak<Peer>, room_id: String, new_track: Arc<TrackRemote>) {
@@ -230,9 +253,10 @@ impl SFU {
         }
 
         let session_id = p.unwrap().session_id.clone();
+        this.remote_tracks.lock().await.insert(session_id.clone(), Arc::downgrade(&new_track));
 
         let participants = room.lock().await.clone().into_iter()
-            .filter(move |(_, participant)| participant.session_id != session_id);
+            .filter(move |(_, participant)| participant.session_id.clone() != session_id.clone());
 
         tokio::spawn(async move {
             participants.for_each(|(_, participant)| {
@@ -240,49 +264,50 @@ impl SFU {
                 let participant = Arc::clone(&participant);
                 let this = this.clone();
                 tokio::spawn(async move {
+                    // TODO pass cancel signal after peer exit
                     this.send_track_to_participant(new_track, participant).await;
                 });
             });
         });
     }
 
-    pub async fn accept_offer(&self, session_id: String, offer: RTCSessionDescription, room_id: String) -> RTCSessionDescription {
-        let peer = self.new_peer(session_id, room_id).await;
-        peer.rtp_peer.set_remote_description(offer).await.unwrap();
-        let answer = peer.rtp_peer.create_answer(None).await.unwrap();
+    pub async fn accept_offer(&self, session_id: String, offer: RTCSessionDescription, room_id: String) -> Result<RTCSessionDescription> {
+        let peer = self.get_or_create_peer(session_id, room_id).await?;
+        peer.rtp_peer.set_remote_description(offer).await?;
+        let answer = peer.rtp_peer.create_answer(None).await?;
 
         let mut gather_complete = peer.rtp_peer.gathering_complete_promise().await;
-        peer.rtp_peer.set_local_description(answer.clone()).await.unwrap();
+        peer.rtp_peer.set_local_description(answer.clone()).await?;
         let _ = gather_complete.recv().await;
 
-        answer
+        Ok(answer)
     }
 
-    pub(crate) async fn accept_answer(&self, session_id: String, answer: RTCSessionDescription, room_id: String) {
+    pub(crate) async fn accept_answer(&self, session_id: String, answer: RTCSessionDescription, room_id: String) -> Result<()> {
         let peer = self.get_peer(session_id).await;
         if peer.is_none() {
-            println!("No peer found for this session"); // TODO error
-            return;
+            return bail!("No peer found for this session");
         }
 
-        peer.unwrap().rtp_peer.set_remote_description(answer).await.unwrap();
+        peer.unwrap().rtp_peer.set_remote_description(answer).await?;
+        Ok(())
     }
 
-    pub async fn accept_candidate(&self, session_id: String, candidate: RTCIceCandidateInit) -> () {
+    pub async fn accept_candidate(&self, session_id: String, candidate: RTCIceCandidateInit) -> Result<()> {
         let peer = self.get_peer(session_id).await;
         if peer.is_none() {
-            println!("No peer found for this session"); // TODO error
-            return;
+            return bail!("No peer found for this session");
         }
 
-        peer.unwrap().rtp_peer.add_ice_candidate(candidate).await; // TODO error handling
+        peer.unwrap().rtp_peer.add_ice_candidate(candidate).await?; // TODO error handling
+        Ok(())
     }
 
     async fn send_track_to_participant(&self, track: Arc<TrackRemote>, dist: Arc<Peer>) {
         let dist_track = Arc::new(TrackLocalStaticRTP::new(
             track.codec().capability,
-            "video".to_owned(),
-            "webrtc-rs".to_owned(),
+            track.id() + "-to-" + dist.session_id.as_str(),
+            track.id(),
         ));
 
         let dist_track2 = Arc::clone(&dist_track);
@@ -290,6 +315,7 @@ impl SFU {
 
         // print!("send rtp to {} -> {}", &session_id3, &other_session);
         // Read RTP packets being sent to webrtc-rs
+
         while let Ok((rtp, _)) = track.read_rtp().await {
             if let Err(err) = dist_track.write_rtp(&rtp).await {
                 if Error::ErrClosedPipe != err {
@@ -301,11 +327,47 @@ impl SFU {
             }
         }
     }
+
+    async fn on_connected(&self, new_peer: Arc<Peer>, room: Arc<Mutex<HashMap<String, Arc<Peer>>>>) {
+
+        let session_id = new_peer.session_id.clone();
+
+        let room = room.lock().await;
+        let participants = room.deref().into_iter().filter(move |(_, participant)| {
+            participant.session_id != session_id.clone()
+        });
+
+        // let tracks = .iter().filter(|(_, track)| {
+        //     track.upgrade().unwrap()
+        // });
+
+        participants.for_each(|(_, participant)| {
+            let this = self.clone();
+
+            let tracks = block_on(this.remote_tracks.lock());
+            let track = tracks.get(&participant.session_id);
+            if track.is_some() {
+                let track = track.unwrap().upgrade();
+                if track.is_some() {
+                    let track = track.unwrap();
+
+                    let new_peer = Arc::clone(&new_peer);
+                    let this = this.clone();
+                    tokio::spawn(async move {
+                        this.send_track_to_participant(track, new_peer).await;
+                    });
+                } else {
+                    block_on(this.remote_tracks.lock()).remove(&participant.session_id);
+                }
+            }
+
+        })
+    }
 }
 
 
 
-pub async fn create_peer() -> webrtc::error::Result<RTCPeerConnection> {
+pub async fn create_peer(session_id: String) -> webrtc::error::Result<RTCPeerConnection> {
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
     let mut registry = Registry::new();
@@ -327,6 +389,7 @@ pub async fn create_peer() -> webrtc::error::Result<RTCPeerConnection> {
             ],
             ..Default::default()
         }],
+        peer_identity: session_id.clone(),
         ..Default::default()
     };
     api.new_peer_connection(config).await

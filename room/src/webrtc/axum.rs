@@ -3,7 +3,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use axum::extract::{Query, State, WebSocketUpgrade};
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use axum::extract::ws::{Message, WebSocket};
 use axum::routing::{any, post};
@@ -15,7 +15,11 @@ use tower_http::cors::CorsLayer;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use crate::webrtc::sfu::{Signalling, SFU};
 use futures::{SinkExt, StreamExt};
-use webrtc::ice_transport::ice_candidate::RTCIceCandidateInit;
+use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
+use anyhow::{bail, Result};
+use http::StatusCode;
+use thiserror::Error;
+use webrtc::ice::candidate::Candidate;
 
 pub(crate) type SocketClient = (Mutex<SplitSink<WebSocket, Message>>, Mutex<SplitStream<WebSocket>>);
 
@@ -25,6 +29,15 @@ pub struct AppState {
     pub(crate) sfu: SFU,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type", content = "playground")]
+pub enum SignalingResponse {
+    #[serde(rename = "sdp")]
+    Sdp(RTCSessionDescription),
+
+    #[serde(rename = "candidate")]
+    Candidate(Option<RTCIceCandidate>),
+}
 
 struct WebsocketSignalling {
     sessions: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>
@@ -38,17 +51,39 @@ impl WebsocketSignalling {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum SfuError {
+    #[error("Session not found")]
+    SessionNotFound,
+}
+
 impl Signalling for WebsocketSignalling {
-    fn send_sdp(&self, session_id: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output=()> + Send + '_>> {
+    fn send_sdp(&self, session_id: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output=Result<()>> + Send + '_>> {
         Box::pin(async move {
             let sessions = self.sessions.lock().await;
             let session = sessions.get(&session_id);
             if session.is_none() {
-                println!("session not found: {}", session_id); // todo log
+                Err(SfuError::SessionNotFound.into())
             } else {
                 let session = session.unwrap();
-                let playground = serde_json::to_string(&sdp).unwrap(); // TODO
-                session.0.lock().await.send(Message::from(playground)).await.unwrap();// TODO
+                let playground = serde_json::to_string(&SignalingResponse::Sdp(sdp))?;
+                session.0.lock().await.send(Message::from(playground)).await?;
+                Ok(())
+            }
+        })
+    }
+
+    fn send_ice_candidate(&self, session_id: String, candidate: Option<RTCIceCandidate>) -> Pin<Box<dyn Future<Output=Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            let sessions = self.sessions.lock().await;
+            let session = sessions.get(&session_id);
+            if session.is_none() {
+                Err(SfuError::SessionNotFound.into())
+            } else {
+                let session = session.unwrap();
+                let playground = serde_json::to_string(&SignalingResponse::Candidate(candidate))?;
+                session.0.lock().await.send(Message::from(playground)).await?;
+                Ok(())
             }
         })
     }
@@ -123,13 +158,35 @@ struct AnswerResponse {
     session_id: String,
 }
 
-async fn accept_offer(State(app_state): State<AppState>, Json(req): Json<AcceptOfferReq>) -> impl IntoResponse {
-    let answer = app_state.sfu.accept_offer(req.session_id.clone(), req.offer, req.room_id).await;
+async fn accept_offer(State(app_state): State<AppState>, Json(req): Json<AcceptOfferReq>) -> Result<impl IntoResponse, AppError> {
+    let answer = app_state.sfu.accept_offer(req.session_id.clone(), req.offer, req.room_id).await?;
 
-    Json(AnswerResponse {
+    Ok(Json(AnswerResponse {
         answer,
         session_id: req.session_id,
-    })
+    }))
+}
+
+// Make our own error that wraps `anyhow::Error`.
+struct AppError(anyhow::Error);
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Something went wrong: {}", self.0),
+        )
+            .into_response()
+    }
+}
+
+impl<E> From<E> for AppError
+where
+    E: Into<anyhow::Error>,
+{
+    fn from(err: E) -> Self {
+        Self(err.into())
+    }
 }
 
 #[derive(Deserialize, Serialize)]
