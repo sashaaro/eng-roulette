@@ -1,7 +1,8 @@
 import {type FunctionComponent, useCallback, useContext} from "react";
 import {accountService} from "~/service/account";
-import {SessionContext} from "~/context/session";
+import {SessionContext, useAuth} from "~/context/session";
 import { useForm } from "react-hook-form"
+import {useNavigate} from "react-router";
 
 type Inputs = {
     username: string
@@ -18,11 +19,17 @@ export default function Login({register_mode} : {register_mode: boolean}){
         formState: { errors },
     } = useForm<Inputs>()
 
+    const {user, setUser} = useAuth();
+    let navigate = useNavigate();
+
     const onSubmit = async (data: Inputs) => {
         let tokenResponse = register_mode ?
             await accountService.register(data.username, data.password) :
             await accountService.login(data.username, data.password)
 
+        setUser({username: data.username, id: 1})
+
+        navigate("/")
         // save jwt session
         //session
     }

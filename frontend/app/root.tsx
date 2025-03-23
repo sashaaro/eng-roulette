@@ -9,6 +9,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import {AuthProvider} from "~/context/session";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,7 +24,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/*<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/digitallytailored/classless@latest/classless.min.css"/>*/}
     </head>
     <body>
-    {children}
+    <AuthProvider>
+      {children}
+    </AuthProvider>
+
     <ScrollRestoration/>
     <Scripts/>
     </body>
