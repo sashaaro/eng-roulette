@@ -21,9 +21,12 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
-use webrtc::track::track_local::TrackLocalWriter;
+use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
 use webrtc::track::track_remote::TrackRemote;
 use webrtc::Error;
+use webrtc::peer_connection::signaling_state::RTCSignalingState;
+use env_logger::Builder;
+use log::LevelFilter;
 
 pub struct Peer {
     pub(crate) session_id: String,
@@ -46,6 +49,30 @@ pub struct SFU(Arc<(SFUInner)>);
 pub trait Signalling: Sync + Send {
     fn send_sdp(&self, string: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
     fn send_ice_candidate(&self, session_id: String, candidate: Option<RTCIceCandidate>) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
+}
+
+pub trait Signalling2: Sync + Send {
+    fn send_sdp(&self, string: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
+}
+
+impl Signalling2 for i8 {
+    fn send_sdp(&self, string: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output=Result<()>> + Send>> {
+        Box::pin(async {
+            Ok(())
+        })
+    }
+}
+
+impl Signalling2 for i32 {
+    fn send_sdp(&self, string: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output=Result<()>> + Send + '_>> {
+        Box::pin(async move {
+            let a = self;
+            if *a > 0 {
+
+            }
+            Ok(())
+        })
+    }
 }
 
 impl SFU {
@@ -112,7 +139,6 @@ impl SFU {
                 let peer2 = Arc::clone(&peer2);
                 let this = this.clone();
 
-                println!("Peer Connection on ice candidate: {:?}", c);
                 Box::pin(async move {
                     this.signalling.send_ice_candidate(peer2.session_id.clone(), c).await;
                 })
@@ -120,25 +146,28 @@ impl SFU {
 
         let peer2 = Arc::clone(&peer);
 
-        let this = self.clone();
-        peer.rtp_peer.on_negotiation_needed(Box::new(move || {
-            Box::pin({
-                let peer2 = Arc::clone(&peer2);
-                let peer3 = Arc::clone(&peer2);
-                let this = this.clone();
-
-                async move {
-                    println!("Peer Connection {:?} Negotiation needed", peer2.session_id);
-
-                    match this.on_negotiation_needed(peer2).await {
-                        Err(e) => {
-                            println!("negotiation needed error: {:?} {:?}", e, peer3.session_id);
-                        },
-                        _ => {}
-                    };
-                }
-            })
-        }));
+        // let this = self.clone();
+        // peer.rtp_peer.on_negotiation_needed(Box::new(move || {
+        //     Box::pin({
+        //         let peer2 = Arc::clone(&peer2);
+        //         let peer3 = Arc::clone(&peer2);
+        //         let this = this.clone();
+        //
+        //         async move {
+        //             println!("Peer Connection {:?} Negotiation needed. Signaling state {:?}", peer2.session_id, peer2.rtp_peer.signaling_state());
+        //             if peer2.rtp_peer.signaling_state() != RTCSignalingState::Stable {
+        //                 return
+        //             }
+        //
+        //             match this.on_negotiation_needed(peer2).await {
+        //                 Err(e) => {
+        //                     println!("negotiation needed error: {:?} {:?}", e, peer3.session_id);
+        //                 },
+        //                 _ => {}
+        //             };
+        //         }
+        //     })
+        // }));
 
 
         // let peer2 = Arc::clone(&peer);
@@ -252,20 +281,33 @@ impl SFU {
             return;
         }
 
-        let session_id = p.unwrap().session_id.clone();
+        let p = p.unwrap();
+        let session_id = p.session_id.clone();
         this.remote_tracks.lock().await.insert(session_id.clone(), Arc::downgrade(&new_track));
 
         let participants = room.lock().await.clone().into_iter()
             .filter(move |(_, participant)| participant.session_id.clone() != session_id.clone());
 
         tokio::spawn(async move {
+
             participants.for_each(|(_, participant)| {
                 let new_track = Arc::clone(&new_track);
                 let participant = Arc::clone(&participant);
+                let participant2 = Arc::clone(&participant);
                 let this = this.clone();
+                let p = Arc::clone(&p);
                 tokio::spawn(async move {
                     // TODO pass cancel signal after peer exit
+
+                    let senders = p.rtp_peer.get_senders().await;
+
+
                     this.send_track_to_participant(new_track, participant).await;
+
+                    if !senders.is_empty() {
+                        let sender = senders.get(0).unwrap();
+                        participant2.rtp_peer.remove_track(sender).await.unwrap()
+                    }
                 });
             });
         });
@@ -311,7 +353,18 @@ impl SFU {
         ));
 
         let dist_track2 = Arc::clone(&dist_track);
+        let dist_track3 = Arc::clone(&dist_track);
         dist.rtp_peer.add_track(dist_track2).await.unwrap();
+
+
+        let dist2 = Arc::clone(&dist);
+        match self.on_negotiation_needed(Arc::clone(&dist)).await {
+            Err(e) => {
+                println!("negotiation needed error: {:?}", dist2.session_id.clone());
+                return;
+            },
+            _ => {}
+        };
 
         // print!("send rtp to {} -> {}", &session_id3, &other_session);
         // Read RTP packets being sent to webrtc-rs

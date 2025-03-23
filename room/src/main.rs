@@ -5,6 +5,9 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use clap::Parser;
+use env_logger::Builder;
+use log::LevelFilter;
+
 mod webrtc;
 
 /// Simple program to greet a person
@@ -34,6 +37,9 @@ async fn main() -> anyhow::Result<()> {
     // initialize tracing
     tracing_subscriber::fmt::init();
 
+    // Builder::new()
+    //     .filter(None, LevelFilter::Off) // Disable all logs
+    //     .init();
 
     let args = Args::parse();
 

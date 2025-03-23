@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fmt::Pointer;
 use std::sync::Arc;
 use actix_web::web::Data;
 use chrono::{Utc, Duration};
@@ -8,6 +9,15 @@ use crate::domain::repository::{PremiumRepository, UserRepository};
 use crate::domain::service::BillingService;
 use crate::infra::repository::{PgPremiumRepository, PgUserRepository};
 use crate::infra::service::InternalBillingService;
+use thiserror;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum AppError {
+    #[error("not found")]
+    NotFound,
+}
+
 
 // TODO generate from hostname?
 const NODE: &[u8; 6] = &[1, 2, 3, 4, 5, 6];
@@ -36,7 +46,7 @@ impl Application {
         let tx_id = Uuid::now_v6(NODE);
         let until = Utc::now() + Duration::hours(2);
 
-        let user = self.user_repo.find_user(user_id).await?;
+        let user = self.user_repo.find(user_id).await?;
 
         if user.is_none() {
             ()
@@ -49,7 +59,21 @@ impl Application {
         Ok(())
     }
 
-    pub async fn create_user(&self, name: String, password: String) -> Result<User, Box<dyn Error>> {
+    pub async fn create_user(&self, name: String, password: String) -> anyhow::Result<User> {
         self.user_repo.create_user(name, password).await
+    }
+
+    pub async fn login(&self, name: String, password: String) -> anyhow::Result<User> {
+        let user = self.user_repo.find_by_username(name.as_str()).await;
+        match user {
+            Ok(Some(user)) => {
+                // todo match password
+
+                Ok(user)
+            },
+            Ok(None) => Err(AppError::NotFound.into()),
+            Err(err) => Err(err),
+            _ => unreachable!()
+        }
     }
 }

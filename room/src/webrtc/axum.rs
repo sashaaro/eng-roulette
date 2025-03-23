@@ -102,8 +102,8 @@ pub async fn create_sfu_router() -> Router {
 
     let app = Router::new()
         .route("/ws", any(ws))
-        .route("/accept-offer", post(accept_offer))
-        .route("/accept-answer", post(accept_answer))
+        .route("/offer", post(accept_offer))
+        .route("/answer", post(accept_answer))
         .route("/candidate", post(candidate))
         .layer(CorsLayer::permissive())
         .with_state(state);

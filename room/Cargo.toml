@@ -24,6 +24,8 @@ headers = "0.4.0"
 tower-http = { version = "0.6.2", features = ["cors"] }
 rand = "0.8.5"
 thiserror = "1.0.69"
+env_logger = "0.11.7"
+log = "0.4.22"
 
 [build-dependencies]
 tonic-build = "0.11"

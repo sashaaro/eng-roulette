@@ -47,7 +47,36 @@ async fn register(
             HttpResponse::NotFound().body(format!("err: {:?}", err))
         }
     }
- }
+}
+
+#[post("/login")]
+async fn login(
+    req_body: String,
+    auth_manager: web::Data<AuthManager>,
+    app: web::Data<Application>,
+) -> impl Responder {
+    let body = serde_json::from_str::<RegisterBody>(req_body.as_str());
+    if body.is_err() {
+        return HttpResponse::BadRequest().body(format!("err: {:?}", body.err()));
+    }
+
+    let b = body.unwrap();
+    match app.login(b.name, b.password).await {
+        Ok(user) => {
+            let token = auth_manager.auth_header(Claims {
+                sub: user.id,
+                exp: chrono::Utc::now().timestamp() + JWT_TTL,
+            });
+
+            HttpResponse::Ok().json(&RegisterResp{
+                token: token
+            })
+        },
+        Err(err) => {
+            HttpResponse::NotFound().body(format!("err: {:?}", err))
+        }
+    }
+}
 
 #[get("/me")]
 async fn me(
@@ -83,7 +112,7 @@ async fn get_account(
     user_repo: web::Data<dyn UserRepository>,
     id: web::Path<i64>
 ) -> impl Responder {
-    let user = user_repo.find_user(id.into_inner()).await;
+    let user = user_repo.find(id.into_inner()).await;
 
     match user {
         Ok(None) => HttpResponse::NotFound().body("user not found"),

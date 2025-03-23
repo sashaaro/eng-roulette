@@ -17,6 +17,7 @@ use crate::application::account::Application;
 use crate::infra::auth::AuthManager;
 use sqlx::{Pool, Postgres};
 use actix_web::web::{Data, ServiceConfig};
+use actix_cors::Cors;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -32,7 +33,17 @@ async fn main() -> std::io::Result<()> {
     println!("Start server on port {}", port);
 
     HttpServer::new(move || {
-        App::new().configure(config_app(pool.clone()))
+        let cors = Cors::default()
+            .allowed_origin("http://localhost:5173")
+            .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
+            .allowed_headers(vec![
+                actix_web::http::header::CONTENT_TYPE,
+                actix_web::http::header::ACCEPT,
+            ])
+            .supports_credentials()
+            .max_age(3600);
+
+        App::new().configure(config_app(pool.clone())).wrap(cors)
     })
     .bind(("127.0.0.1", port))?
     .run()
@@ -67,6 +78,7 @@ fn config_app(pool: Pool<Postgres>) -> Box<dyn Fn(&mut ServiceConfig)> {
             .service(infra::routes::get_account)
             .service(infra::routes::buypremium)
             .service(infra::routes::register)
+            .service(infra::routes::login)
             .service(infra::routes::me);
     })
 }
