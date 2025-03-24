@@ -21,6 +21,9 @@ use actix_cors::Cors;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    std::env::set_var("RUST_LOG", "debug");
+    env_logger::init();
+
     let pool = infra::db::pg().await;
 
     let port = env::var_os("HTTP_PORT")
@@ -39,6 +42,7 @@ async fn main() -> std::io::Result<()> {
             .allowed_headers(vec![
                 actix_web::http::header::CONTENT_TYPE,
                 actix_web::http::header::ACCEPT,
+                actix_web::http::header::AUTHORIZATION,
             ])
             .supports_credentials()
             .max_age(3600);

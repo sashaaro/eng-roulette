@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc};
 use axum::extract::{Query, State, WebSocketUpgrade};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
@@ -17,9 +17,11 @@ use crate::webrtc::sfu::{Signalling, SFU};
 use futures::{SinkExt, StreamExt};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use anyhow::{bail, Result};
+use axum::middleware::from_extractor;
 use http::StatusCode;
+use jsonwebtoken::DecodingKey;
 use thiserror::Error;
-use webrtc::ice::candidate::Candidate;
+use crate::webrtc::extract::{Claims, JWTRejection, JWT};
 
 pub(crate) type SocketClient = (Mutex<SplitSink<WebSocket, Message>>, Mutex<SplitStream<WebSocket>>);
 
@@ -101,6 +103,7 @@ pub async fn create_sfu_router() -> Router {
     };
 
     let app = Router::new()
+        .layer(from_extractor::<JWT>())
         .route("/ws", any(ws))
         .route("/offer", post(accept_offer))
         .route("/answer", post(accept_answer))
@@ -113,21 +116,39 @@ pub async fn create_sfu_router() -> Router {
 
 #[derive(Deserialize)]
 struct WsRequest {
-    session_id: String,
+    jwt: String,
 }
 
 async fn ws(
     ws: WebSocketUpgrade,
     Query(req): Query<WsRequest>,
     State(app_state): State<AppState>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
+
+    let secret = "secret".to_string();
+
+    //let secret = std::env::var("SECRET_KEY").unwrap().as_ref();
+    // TODO inject from config
+    let decoding_key = &DecodingKey::from_secret(secret.as_ref());
+
+
+    let jwt = req.jwt.trim_start_matches("Bearer").trim();
+
+    let claims = jsonwebtoken::decode::<Claims>(
+        jwt,
+        decoding_key,
+        &jsonwebtoken::Validation::default(),
+    )
+        .map(|t| {
+            t.claims
+        })?;
+
+
     let sessions = app_state.sessions.clone();
 
-    let session_id = req.session_id.clone();
-
-    ws.on_failed_upgrade(move |error| {
+    let resp =ws.on_failed_upgrade(move |error| {
         println!("on_failed_upgrade {:?}", error);
-        block_on(sessions.lock()).remove(&req.session_id);
+        block_on(sessions.lock()).remove(&claims.sub.to_string());
     })
         .on_upgrade(async move |socket| {
             let (sender, receiver) = socket.split();
@@ -140,14 +161,15 @@ async fn ws(
                 .sessions
                 .lock()
                 .await
-                .insert(session_id.clone(), Arc::clone(&socket_client));
-        })
+                .insert(claims.sub.to_string(), Arc::clone(&socket_client));
+        });
+
+    Ok(resp)
 }
 
 #[derive(Deserialize, Serialize)]
 struct AcceptOfferReq {
     offer: RTCSessionDescription,
-    session_id: String,
     room_id: String,
 }
 
@@ -155,15 +177,17 @@ struct AcceptOfferReq {
 #[derive(Deserialize, Serialize)]
 struct AnswerResponse {
     answer: RTCSessionDescription,
-    session_id: String,
 }
 
-async fn accept_offer(State(app_state): State<AppState>, Json(req): Json<AcceptOfferReq>) -> Result<impl IntoResponse, AppError> {
-    let answer = app_state.sfu.accept_offer(req.session_id.clone(), req.offer, req.room_id).await?;
+async fn accept_offer(
+    JWT(claims): JWT,
+    State(app_state): State<AppState>,
+    Json(req): Json<AcceptOfferReq>,
+) -> Result<impl IntoResponse, AppError> {
+    let answer = app_state.sfu.accept_offer(claims.sub.to_string(), req.offer, req.room_id).await?;
 
     Ok(Json(AnswerResponse {
         answer,
-        session_id: req.session_id,
     }))
 }
 
@@ -192,31 +216,30 @@ where
 #[derive(Deserialize, Serialize)]
 struct AcceptAnswerReq {
     answer: RTCSessionDescription,
-    session_id: String,
     room_id: String,
 }
 
-async fn accept_answer(State(app_state): State<AppState>, Json(req): Json<AcceptAnswerReq>) -> impl IntoResponse {
-    app_state.sfu.accept_answer(req.session_id.clone(), req.answer, req.room_id).await;
+async fn accept_answer(
+    JWT(claims): JWT,
+    State(app_state): State<AppState>,
+    Json(req): Json<AcceptAnswerReq>
+) -> Result<impl IntoResponse, AppError> {
+    app_state.sfu.accept_answer(claims.sub.to_string().clone(), req.answer, req.room_id).await?;
 
-    "ok"
+    Ok("ok")
 }
 
 #[derive(Deserialize, Serialize)]
 struct CandidateRequest {
     candidate: RTCIceCandidateInit,
-    session_id: String,
 }
 
 async fn candidate(
+    JWT(claims): JWT,
     State(app_state): State<AppState>,
     Json(req): Json<CandidateRequest>,
-) -> impl IntoResponse {
-    if req.session_id.clone().len() == 0 {
-        return "invalid candidates";
-    }
+) -> Result<impl IntoResponse, AppError> {
+    app_state.sfu.accept_candidate(claims.sub.to_string(), req.candidate).await?;
 
-    app_state.sfu.accept_candidate(req.session_id, req.candidate).await;
-
-    "ok"
+    Ok("ok")
 }

@@ -11,11 +11,14 @@ use crate::infra::repository::{PgPremiumRepository, PgUserRepository};
 use crate::infra::service::InternalBillingService;
 use thiserror;
 use thiserror::Error;
+use crate::application::account::AppError::WrongPassword;
 
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("not found")]
     NotFound,
+    #[error("wrong password")]
+    WrongPassword,
 }
 
 
@@ -66,13 +69,27 @@ impl Application {
     pub async fn login(&self, name: String, password: String) -> anyhow::Result<User> {
         let user = self.user_repo.find_by_username(name.as_str()).await;
         match user {
-            Ok(Some(user)) => {
-                // todo match password
+            Err(err) => Err(err),
+            Ok(Some(user)) if user.is_active => {
+                if password == user.password {
+                    Ok(user)
+                } else {
+                    Err(WrongPassword.into())
+                }
+            },
+            Ok(None) => Err(AppError::NotFound.into()),
+            _ => unreachable!()
+        }
+    }
 
+    pub async fn me(&self, id: i64) -> anyhow::Result<User> {
+        let user = self.user_repo.find(id).await;
+        match user {
+            Err(err) => Err(err),
+            Ok(Some(user)) if user.is_active => {
                 Ok(user)
             },
             Ok(None) => Err(AppError::NotFound.into()),
-            Err(err) => Err(err),
             _ => unreachable!()
         }
     }

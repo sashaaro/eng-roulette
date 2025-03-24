@@ -3,6 +3,7 @@ use actix_web::{get, HttpRequest, HttpResponse, post, Responder, web};
 use jsonwebtoken;
 use crate::domain::repository::UserRepository;
 use serde::{Deserialize, Serialize};
+use crate::application::account::AppError::NotFound;
 use crate::application::account::Application;
 use crate::infra::auth::{AuthManager, Claims};
 
@@ -74,6 +75,7 @@ async fn login(
         },
         Err(err) => {
             HttpResponse::NotFound().body(format!("err: {:?}", err))
+            // HttpResponse::InternalServerError().body(format!("err: {:?}", err))
         }
     }
 }
@@ -81,7 +83,8 @@ async fn login(
 #[get("/me")]
 async fn me(
     req: HttpRequest,
-    auth_manager: web::Data<AuthManager>
+    auth_manager: web::Data<AuthManager>,
+    app: web::Data<Application>,
 ) -> impl Responder {
     let token = auth_manager.fetch_claims_from_req(&req);
 
@@ -89,7 +92,14 @@ async fn me(
         return HttpResponse::BadRequest().body(format!("err: {:?}", token.err()));
     }
 
-     HttpResponse::Ok().body(token.unwrap().sub.to_string())
+    let user = app.me(token.unwrap().sub).await;
+
+    if user.is_err() {
+        return HttpResponse::InternalServerError().body("err");
+    }
+    let user = user.unwrap();
+
+    HttpResponse::Ok().json(user)
 }
 
 

@@ -5,6 +5,11 @@ interface TokenResponse {
     token: string;
 }
 
+interface UserResponse {
+    id: number;
+    username: string;
+}
+
 export class AccountService {
     private axiosClient: AxiosInstance;
 
@@ -21,6 +26,16 @@ export class AccountService {
 
     async login(username: string, password: string) {
         const response = await this.axiosClient.post<TokenResponse>("/login", {name: username, password: password});
+        return response.data;
+    }
+
+    async me(token: string) { // TODO auth token middleware
+        const response = await this.axiosClient.get<UserResponse>("/me", {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            }
+        });
         return response.data;
     }
 }

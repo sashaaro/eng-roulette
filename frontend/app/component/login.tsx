@@ -23,11 +23,14 @@ export default function Login({register_mode} : {register_mode: boolean}){
     let navigate = useNavigate();
 
     const onSubmit = async (data: Inputs) => {
-        let tokenResponse = register_mode ?
+        const tokenResponse = register_mode ?
             await accountService.register(data.username, data.password) :
             await accountService.login(data.username, data.password)
 
-        setUser({username: data.username, id: 1})
+        const token = tokenResponse.token;
+        const user = await accountService.me(token)
+
+        setUser({username: user.username, id: user.id, token: token})
 
         navigate("/")
         // save jwt session

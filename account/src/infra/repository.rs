@@ -69,14 +69,7 @@ impl repository::UserRepository for PgUserRepository {
         ).bind(username).fetch_one(&self.pool).await;
         match row {
             Ok(row) => {
-                let u = User {
-                    id: row.get("id"),
-                    username: row.get("username"),
-                    password: "".to_string(),
-                    is_active: row.get("is_active"),
-                    premium_until: row.get("premium_until"),
-                };
-                Ok(Some(u))
+                Ok(Some(row.into()))
             },
             Err(RowNotFound) => Ok(None),
             Err(err) => Err(err.into()),
@@ -89,14 +82,7 @@ impl repository::UserRepository for PgUserRepository {
         ).bind(id).fetch_one(&self.pool).await;
         match row {
             Ok(row) => {
-                let u = User {
-                    id: row.get("id"),
-                    username: row.get("username"),
-                    password: "".to_string(),
-                    is_active: row.get("is_active"),
-                    premium_until: row.get("premium_until"),
-                };
-                Ok(Some(u))
+                Ok(Some(row.into()))
             },
             Err(RowNotFound) => Ok(None),
             Err(err) => Err(err.into()),

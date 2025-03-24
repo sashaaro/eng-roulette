@@ -1,8 +1,9 @@
 import {type ContextType, createContext, type ReactNode, useContext, useEffect, useState} from "react";
 
-interface User {
+export interface User {
     id: number;
     username: string;
+    token: string;
 }
 
 interface AuthContextType {
