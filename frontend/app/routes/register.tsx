@@ -1,7 +1,7 @@
 import type { Route } from "./+types/home";
 import {SessionContext} from "~/context/session";
 import {useContext} from "react";
-import Login from "~/component/login";
+import Login from "~/component/Login";
 
 export function loader() {
   return { name: "React Router" };

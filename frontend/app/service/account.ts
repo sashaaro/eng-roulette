@@ -1,6 +1,16 @@
 import axios, {type AxiosInstance} from 'axios';
 
 
+export const createBaseURL = function (port: string, protocol?: string): string {
+    if (typeof window !== 'undefined' && window.location?.port != "") {
+        const location: any = window.location;
+
+        return (protocol || location.protocol) + '//'+location.hostname+':' + port
+    } else {
+        return 'http://localhost:' + port
+    }
+}
+
 interface TokenResponse {
     token: string;
 }
@@ -13,7 +23,13 @@ interface UserResponse {
 export class AccountService {
     private axiosClient: AxiosInstance;
 
-    constructor(baseURL: string = 'http://localhost:8080') {
+    constructor(baseURL?: string) {
+        if (!baseURL) {
+            baseURL = createBaseURL("8080")
+        }
+
+        baseURL = "https://roullette.botenza.org/api/account";
+
         this.axiosClient = axios.create({
             baseURL: baseURL,
             headers: {'Content-Type': 'application/json'},

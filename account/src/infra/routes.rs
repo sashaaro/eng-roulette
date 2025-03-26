@@ -119,14 +119,19 @@ async fn buypremium(
 
 #[get("/account/{id}")]
 async fn get_account(
-    user_repo: web::Data<dyn UserRepository>,
+    //user_repo: web::Data<dyn UserRepository>,
     id: web::Path<i64>
 ) -> impl Responder {
-    let user = user_repo.find(id.into_inner()).await;
 
-    match user {
-        Ok(None) => HttpResponse::NotFound().body("user not found"),
-        Ok(user) => HttpResponse::Ok().json(user),
-        Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err))
-    }
+    HttpResponse::Ok().body("user not found")
+}
+
+
+#[get("/api/account/account/{id}")]
+async fn new_get_account(
+    //user_repo: web::Data<dyn UserRepository>,
+    id: web::Path<i64>
+) -> impl Responder {
+
+    HttpResponse::Ok().body("new user not found")
 }

@@ -1,0 +1,52 @@
+# file provider
+# providers:
+#   file:
+#     filename: ./scripts/traefik.yml
+#
+http:
+  routers:
+    rl-rm:
+      service: rl-rm
+      rule: "Host(`roullette.botenza.org`) && PathPrefix(`/api/room`)"
+      middlewares:
+        - rl-rm-strip
+      tls: true
+
+    rl-acc:
+      service: rl-acc
+      rule: "Host(`roullette.botenza.org`) && PathPrefix(`/api/account`)"
+      middlewares:
+        - rl-acc-strip
+      tls: true
+
+    rl-front:
+      service: rl-front
+      rule: "Host(`roullette.botenza.org`)"
+      tls: true
+
+  services:
+    rl-rm:
+      loadBalancer:
+        servers:
+          - url: "http://:8082"
+
+    rl-acc:
+      loadBalancer:
+        servers:
+          - url: "http://:8081"
+
+    rl-front:
+      loadBalancer:
+        servers:
+          - url: "http://:8057"
+
+  middlewares:
+    rl-rm-strip:
+      stripPrefix:
+        prefixes:
+          - "/api/room"
+
+    rl-acc-strip:
+      stripPrefix:
+        prefixes:
+          - "/api/account"

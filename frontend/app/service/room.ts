@@ -1,6 +1,7 @@
 import axios, {type AxiosInstance} from "axios";
 import type {User} from "~/context/session";
 import {createWS} from "~/service/ws";
+import {createBaseURL} from "~/service/account";
 
 
 function callbackToPromise(): any {
@@ -19,7 +20,13 @@ export class RoomService {
 
     private ws: WebSocket | undefined;
 
-    constructor(baseURL: string = 'http://localhost:8081') {
+    constructor(baseURL?: string) {
+        if (!baseURL) {
+            baseURL = createBaseURL("8081")
+        }
+        baseURL = "https://roullette.botenza.org/api/room";
+
+
         this.axiosClient = axios.create({
             baseURL: baseURL,
             headers: {'Content-Type': 'application/json'},
@@ -60,11 +67,17 @@ export class RoomService {
             ]
         });
 
+        this.pc!.onconnectionstatechange = (e) => {
+            if (["closed", "failed", "disconnected"].includes(this.pc!.connectionState)) {
+                this.pc = undefined;
+            }
+        }
+
         this.pc!.onicecandidate = async (event) => {
             if (!event.candidate) {
                 return
             }
-            await this.candidate(event.candidate, user);
+            await this.candidate(event.candidate, user, room);
         }
 
         this.pc!.onnegotiationneeded = e => {
@@ -80,8 +93,8 @@ export class RoomService {
         return {pc: this.pc!, localStream: stream}
     }
 
-    private async candidate(candidate: RTCIceCandidate, user: User) {
-        const resp = await this.axiosClient.post<{answer: RTCSessionDescription}>("/candidate", {candidate}, {
+    private async candidate(candidate: RTCIceCandidate, user: User, room: string) {
+        const resp = await this.axiosClient.post<{answer: RTCSessionDescription}>("/candidate", {candidate, room_id: room}, {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${user.token}`,
@@ -103,7 +116,7 @@ export class RoomService {
 
     private async createOffer(room_id: string, user: User) {
         const offer = await this.pc?.createOffer()
-        this.pc?.setLocalDescription(offer)
+        await this.pc?.setLocalDescription(offer)
         const resp = await this.axiosClient.post<{answer: RTCSessionDescription}>("/offer", {offer, room_id}, {
             headers: {
                 'Content-Type': 'application/json',

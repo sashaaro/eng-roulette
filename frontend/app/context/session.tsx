@@ -1,4 +1,5 @@
 import {type ContextType, createContext, type ReactNode, useContext, useEffect, useState} from "react";
+import {accountService} from "~/service/account";
 
 export interface User {
     id: number;
@@ -17,8 +18,22 @@ export function AuthProvider({children}: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null)
 
     useEffect(() => {
+        const token = localStorage.getItem("session")
+        if (token) {
+            // TODO loading
+            accountService.me(token).then(user => {
+                setUser({
+                    username: user.username,
+                    id: user.id,
+                    token: token,
+                })
+            })
+        }
         //checkAuth()
     }, [])
+    useEffect(() => {
+        localStorage.setItem("session", user?.token || "")
+    }, [user]);
 
     const ctx: AuthContextType = {user: user, setUser}
 

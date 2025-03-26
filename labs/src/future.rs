@@ -48,9 +48,13 @@ pub fn my_spawn<F, T>(f: F) where
 #[cfg(test)]
 mod tests {
     use std::future::Future;
+    use std::mem;
+    use std::ops::DerefMut;
     use std::pin::Pin;
     use std::sync::Arc;
     use std::task::{Context, Poll};
+    use std::time::Duration;
+    use smol::future::FutureExt;
     use crate::future::{create_timer, ext_create_timer, my_spawn, run_thread};
 
     #[test]

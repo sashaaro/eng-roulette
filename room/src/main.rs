@@ -15,7 +15,8 @@ mod webrtc;
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// Number of times to greet
-    #[arg(short, long, default_value_t = 8081)]
+    #[arg(short, long, default_value_t = 8082
+    )]
     pub port: u16,
 
     #[arg(short, long, default_value_t = false)]

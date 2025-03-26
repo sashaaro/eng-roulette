@@ -41,6 +41,7 @@ trait UniversalDrawable<'a, T> {
     fn get_y(&self) -> &'a T;
 }
 
+#[derive(Debug)]
 struct Circle<'y, T> {
     x: T,
     y: &'y T
@@ -48,12 +49,6 @@ struct Circle<'y, T> {
 impl<'y> Circle<'y, f64> {
     fn get_yy(&self) -> &'y f64 {
         self.y
-    }
-}
-
-impl<'a> Debug for Circle<'a, &str> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
     }
 }
 

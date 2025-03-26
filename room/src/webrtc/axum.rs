@@ -232,6 +232,7 @@ async fn accept_answer(
 #[derive(Deserialize, Serialize)]
 struct CandidateRequest {
     candidate: RTCIceCandidateInit,
+    room_id: String, // TODO remove
 }
 
 async fn candidate(
@@ -239,7 +240,7 @@ async fn candidate(
     State(app_state): State<AppState>,
     Json(req): Json<CandidateRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    app_state.sfu.accept_candidate(claims.sub.to_string(), req.candidate).await?;
+    app_state.sfu.accept_candidate(claims.sub.to_string(), req.room_id, req.candidate).await?;
 
     Ok("ok")
 }

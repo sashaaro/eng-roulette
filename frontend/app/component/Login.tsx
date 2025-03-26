@@ -46,7 +46,7 @@ export default function Login({register_mode} : {register_mode: boolean}){
                 <input type="password" {...register("password")}/>
             </div>
             <div>
-                <button type="submit">Login</button>
+                <button type="submit">{register_mode ? 'Register' : 'Login'}</button>
             </div>
         </form>
     );
