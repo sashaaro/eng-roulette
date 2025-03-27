@@ -4,7 +4,6 @@ use std::sync::{Arc, Weak};
 
 use anyhow::{bail, Result};
 use futures::executor::block_on;
-use futures::{SinkExt, StreamExt};
 use std::ops::{Deref};
 use std::pin::Pin;
 use tokio::sync::Mutex;
@@ -21,7 +20,7 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
-use webrtc::track::track_local::{TrackLocal, TrackLocalWriter};
+use webrtc::track::track_local::{TrackLocalWriter};
 use webrtc::track::track_remote::TrackRemote;
 use webrtc::Error;
 use tokio_util::sync::CancellationToken;
@@ -44,35 +43,11 @@ pub struct SFUInner {
 }
 
 // Selective Forwarding unit
-pub struct SFU(Arc<(SFUInner)>);
+pub struct SFU(Arc<SFUInner>);
 
 pub trait Signalling: Sync + Send {
     fn send_sdp(&self, string: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
     fn send_ice_candidate(&self, session_id: String, candidate: Option<RTCIceCandidate>) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
-}
-
-pub trait Signalling2: Sync + Send {
-    fn send_sdp(&self, string: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
-}
-
-impl Signalling2 for i8 {
-    fn send_sdp(&self, string: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output=Result<()>> + Send>> {
-        Box::pin(async {
-            Ok(())
-        })
-    }
-}
-
-impl Signalling2 for i32 {
-    fn send_sdp(&self, string: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output=Result<()>> + Send + '_>> {
-        Box::pin(async move {
-            let a = self;
-            if *a > 0 {
-
-            }
-            Ok(())
-        })
-    }
 }
 
 impl SFU {
@@ -142,11 +117,16 @@ impl SFU {
                 let this = this.clone();
 
                 Box::pin(async move {
-                    this.signalling.send_ice_candidate(peer2.session_id.clone(), c).await;
+                    match this.signalling.send_ice_candidate(peer2.session_id.clone(), c).await {
+                        Ok(_) => {},
+                        Err(e) => {
+                            println!("Error sending ice candidate: {:?}", e);
+                        }
+                    }
                 })
             }));
 
-        let peer2 = Arc::clone(&peer);
+        // let peer2 = Arc::clone(&peer);
 
         // let this = self.clone();
         // peer.rtp_peer.on_negotiation_needed(Box::new(move || {
@@ -188,7 +168,7 @@ impl SFU {
                 println!("Peer {:?} Connection State has changed: {:?}", peer2.session_id, s);
                 match s {
                     RTCPeerConnectionState::Closed
-                    | RTCPeerConnectionState::Disconnected
+                    //| RTCPeerConnectionState::Disconnected
                     | RTCPeerConnectionState::Failed => {
                         match room.lock().await.remove(peer2.session_id.as_str()) {
                             None => println!("not found session_id in room"),
@@ -315,7 +295,12 @@ impl SFU {
 
                     if !senders.is_empty() {
                         let sender = senders.get(0).unwrap();
-                        participant2.rtp_peer.remove_track(sender).await.unwrap()
+                        match participant2.rtp_peer.remove_track(sender).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                println!("remove track error {:?}", e)
+                            }
+                        }
                     }
                 });
             });

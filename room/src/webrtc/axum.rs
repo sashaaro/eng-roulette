@@ -16,12 +16,12 @@ use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 use crate::webrtc::sfu::{Signalling, SFU};
 use futures::{SinkExt, StreamExt};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
-use anyhow::{bail, Result};
+use anyhow::{Result};
 use axum::middleware::from_extractor;
 use http::StatusCode;
 use jsonwebtoken::DecodingKey;
 use thiserror::Error;
-use crate::webrtc::extract::{Claims, JWTRejection, JWT};
+use crate::webrtc::extract::{Claims, JWT};
 
 pub(crate) type SocketClient = (Mutex<SplitSink<WebSocket, Message>>, Mutex<SplitStream<WebSocket>>);
 
@@ -104,6 +104,7 @@ pub async fn create_sfu_router() -> Router {
 
     let app = Router::new()
         .layer(from_extractor::<JWT>())
+        .route("/version", any(async || "v0.1.0"))
         .route("/ws", any(ws))
         .route("/offer", post(accept_offer))
         .route("/answer", post(accept_answer))

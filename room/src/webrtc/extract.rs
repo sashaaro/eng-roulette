@@ -1,11 +1,9 @@
 use std::future::Future;
-use axum::body::Bytes;
 use axum::extract::{FromRequest, FromRequestParts, Request};
-use axum::Json;
 use axum::response::{IntoResponse, Response};
-use http::{HeaderMap, Method, StatusCode};
+use http::{HeaderMap, StatusCode};
 use http::request::Parts;
-use jsonwebtoken::{DecodingKey, EncodingKey};
+use jsonwebtoken::{DecodingKey};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug)]
@@ -48,7 +46,7 @@ impl<S> FromRequestParts<S> for JWT {
 
     fn from_request_parts(
         parts: &mut Parts,
-        state: &S,
+        _: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
         async {
             fetch_jwt(&parts.headers)
@@ -83,7 +81,7 @@ fn fetch_jwt(headers: &HeaderMap) -> Result<JWT, JWTRejection> {
         .map(|t| {
             t.claims.into()
         })
-        .map_err(|e| {
+        .map_err(|_| {
             JWTRejection::InvalidSignature
         })
 }
@@ -93,7 +91,7 @@ where
     S: Send + Sync,
 {
     type Rejection = JWTRejection;
-    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(req: Request, _: &S) -> Result<Self, Self::Rejection> {
         fetch_jwt(req.headers())
     }
 }

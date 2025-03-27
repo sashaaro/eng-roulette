@@ -19,7 +19,7 @@ struct RegisterResp{
     token: String,
 }
 
-const JWT_TTL: i64= 60;
+const JWT_TTL: i64 = 60 * 15;
 
 #[post("/register")]
 async fn register(

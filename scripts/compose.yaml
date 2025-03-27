@@ -1,0 +1,31 @@
+services:
+  tunnel:
+    image: jpillora/chisel:latest
+    network_mode: host
+    command: "server -p 8080 --reverse"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rl-rm.service=rl-rm
+      - traefik.http.routers.rl-acc.service=rl-acc
+      - traefik.http.routers.rl-front.service=rl-front
+
+  reverse-proxy:
+    image: traefik:v3.3
+    command:
+      - --log.level=DEBUG
+      - --log.filePath=/logs/traefik.log
+    network_mode: host
+    # ports:
+    #   - 80:80
+    #   - 443:443
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PWD}/traefik.yml:/etc/traefik/traefik.yml
+      - ${PWD}/tls.yml:/etc/traefik/tls.yml
+      - /etc/letsencrypt:/etc/letsencrypt
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.api.rule=Host(`traefik.botenza.org`)
+      - traefik.http.routers.api.service=api@internal
+      - traefik.http.services.api.loadbalancer.server.port=8080
+      - traefik.http.routers.api.tls=true

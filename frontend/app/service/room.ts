@@ -2,6 +2,8 @@ import axios, {type AxiosInstance} from "axios";
 import type {User} from "~/context/session";
 import {createWS} from "~/service/ws";
 import {createBaseURL} from "~/service/account";
+import { EventEmitter } from 'eventemitter3'
+import {braceExpand} from "minimatch";
 
 
 function callbackToPromise(): any {
@@ -40,11 +42,46 @@ export class RoomService {
         this.ws.onopen = callback
         await promise;
 
+        const pendingCandidates: RTCIceCandidateInit[] = [];
+
+        const emitter = new EventEmitter();
+        emitter.addListener("onRemoteDescriptionChanged", async () => {
+            // Проверяем, установлен ли remoteDescription
+            if (!this.pc?.remoteDescription) {
+                console.warn("Remote description not set yet, skipping candidate processing");
+                return;
+            }
+
+            while (pendingCandidates.length > 0) {
+                const candidate = pendingCandidates.shift();
+                if (!candidate) continue;
+
+                try {
+                    await this.pc.addIceCandidate(candidate);
+                    console.log("Successfully added ICE candidate:", candidate);
+                } catch (err) {
+                    console.error("Failed to add ICE candidate:", err, candidate);
+                    // Можно вернуть кандидат обратно в очередь или обработать ошибку
+                    pendingCandidates.unshift(candidate);
+                    break;
+                }
+            }
+        })
+
         this.ws.addEventListener("message", async (event) => {
             const d = JSON.parse(event.data)
             switch (d.type) {
                 case "sdp": {
-                    await this.pc!.setRemoteDescription(d.playground);
+                    const sdp: RTCSessionDescription = d.playground
+                    // 0. Проверка состояния
+                    console.log(this.pc!.signalingState)
+                    if (this.pc!.signalingState !== "stable") {
+                        await this.pc!.setLocalDescription({ type: "rollback" });
+                    }
+
+                    await this.pc!.setRemoteDescription(sdp);
+                    emitter.emit("onRemoteDescriptionChanged", sdp);
+
                     const answer = await this.pc!.createAnswer()
                     await this.sendAnswer(user, answer, room)
                     await this.pc!.setLocalDescription(answer);
@@ -52,7 +89,11 @@ export class RoomService {
                 }
                 case "candidate": {
                     if (d.playground) {
-                        await this.pc!.addIceCandidate(d.playground)
+                        if (this.pc!.remoteDescription) {
+                            await this.pc!.addIceCandidate(d.playground);
+                        } else {
+                            pendingCandidates.push(d.playground);
+                        }
                     }
                     break
                 }
@@ -68,8 +109,9 @@ export class RoomService {
         });
 
         this.pc!.onconnectionstatechange = (e) => {
-            if (["closed", "failed", "disconnected"].includes(this.pc!.connectionState)) {
+            if (["closed", "failed"].includes(this.pc!.connectionState)) {
                 this.pc = undefined;
+                emitter.emit("closed", e)
             }
         }
 
@@ -90,7 +132,7 @@ export class RoomService {
         const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: false})
         stream.getTracks().forEach(track => this.pc!.addTrack(track, stream));
 
-        return {pc: this.pc!, localStream: stream}
+        return {pc: this.pc!, localStream: stream, emitter: emitter}
     }
 
     private async candidate(candidate: RTCIceCandidate, user: User, room: string) {
