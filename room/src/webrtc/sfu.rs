@@ -3,7 +3,6 @@ use std::future::Future;
 use std::sync::{Arc, Weak};
 
 use anyhow::{bail, Result};
-use futures::executor::block_on;
 use std::ops::{Deref};
 use std::pin::Pin;
 use tokio::sync::Mutex;
@@ -414,36 +413,38 @@ impl SFU {
 
         let session_id = new_peer.session_id.clone();
 
-        let room = room.lock().await;
-        let participants = room.deref().into_iter().filter(move |(_, participant)| {
-            participant.session_id != session_id.clone()
-        });
+        // 1. Получаем список участников (без блокировки всей комнаты)
+        let participants = {
+            let room = room.lock().await;
+            room.iter()
+                .filter(|(_, p)| p.session_id != session_id)
+                .map(|(id, p)| (id.clone(), Arc::clone(p)))
+                .collect::<Vec<_>>()
+        };
 
-        // let tracks = .iter().filter(|(_, track)| {
-        //     track.upgrade().unwrap()
-        // });
+        // 2. Обрабатываем каждого участника асинхронно
+        let mut join_handles = Vec::new();
 
-        participants.for_each(|(_, participant)| {
+        let mut remote_tracks = self.remote_tracks.lock().await;
+
+        let tracks = participants.iter().map(|(_, participant)|  {
+            (participant.session_id.clone(), remote_tracks.get(&participant.session_id).and_then(|t| t.upgrade()))
+        }).collect::<Vec<_>>();
+
+        for (session_id, track) in tracks {
             let this = self.clone();
+            let new_peer = new_peer.clone();
 
-            let tracks = block_on(this.remote_tracks.lock());
-            let track = tracks.get(&participant.session_id);
-            if track.is_some() {
-                let track = track.unwrap().upgrade();
-                if track.is_some() {
-                    let track = track.unwrap();
-
-                    let new_peer = Arc::clone(&new_peer);
-                    let this = this.clone();
-                    tokio::spawn(async move {
+            match track {
+                Some(track) => {
+                    join_handles.push(tokio::spawn(async move {
+                        // 4. Отправляем трек новому участнику
                         this.send_track_to_participant(track, new_peer).await;
-                    });
-                } else {
-                    block_on(this.remote_tracks.lock()).remove(&participant.session_id);
-                }
-            }
-
-        })
+                    }));
+                },
+                None => {remote_tracks.remove(&session_id);},
+            };
+        };
     }
 }
 
