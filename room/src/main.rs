@@ -1,4 +1,8 @@
 use clap::Parser;
+use env_logger::Builder;
+use log::LevelFilter;
+use std::io::Write;
+use env_logger::fmt::default_kv_format;
 
 mod webrtc;
 
@@ -17,12 +21,14 @@ pub struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // initialize tracing
-    tracing_subscriber::fmt::init();
-
-    // Builder::new()
-    //     .filter(None, LevelFilter::Off) // Disable all logs
-    //     .init();
+    Builder::new()
+        .filter(None, LevelFilter::Info)
+        .filter(Some("webrtc::peer_connection"), LevelFilter::Error) // Disable all logs
+        .filter(Some("webrtc_ice::mdns"), LevelFilter::Error) // Disable all logs
+        .filter(Some("webrtc_mdns::conn"), LevelFilter::Error) // Disable all logs
+        .filter(Some("webrtc_ice::agent::agent_internal"), LevelFilter::Error) // Disable all logs
+        .filter(Some("webrtc_ice::agent::agent_gather"), LevelFilter::Error) // Disable all logs
+        .init();
 
     let args = Args::parse();
     let app = webrtc::axum::create_sfu_router().await;

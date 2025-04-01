@@ -20,20 +20,21 @@ http:
       tls: true
 
   services:
-    rl-rm:
+    rl-front:
       loadBalancer:
         servers:
-          - url: "http://:8082"
+          - url: "http://:8057"
 
     rl-acc:
       loadBalancer:
         servers:
           - url: "http://:8081"
 
-    rl-front:
+    rl-rm:
       loadBalancer:
         servers:
-          - url: "http://:8057"
+          - url: "http://:8082"
+
 
   middlewares:
     rl-rm-strip:

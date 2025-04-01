@@ -21,6 +21,7 @@ export class RoomService {
     private pc: RTCPeerConnection | undefined;
 
     private ws: WebSocket | undefined;
+    private stream?: MediaStream;
 
     constructor(baseURL?: string) {
         if (!baseURL) {
@@ -35,13 +36,24 @@ export class RoomService {
         })
     }
 
+    private async createWS(token: string): Promise<WebSocket> {
+        if (!this.ws) {
+            this.ws = await createWS(token);
+            const {callback, promise } = callbackToPromise()
+            this.ws.addEventListener("open", callback);
+            await promise;
+
+            this.ws!.addEventListener("close", () => {
+                this.ws = undefined;
+            })
+        }
+
+        return this.ws
+    }
+
+
     async createSession(room: string, user: User) {
-        this.ws = await createWS(user.token);
-
-        const {callback, promise } = callbackToPromise()
-        this.ws.onopen = callback
-        await promise;
-
+        await this.createWS(user.token);
         const pendingCandidates: RTCIceCandidateInit[] = [];
 
         const emitter = new EventEmitter();
@@ -58,7 +70,7 @@ export class RoomService {
 
                 try {
                     await this.pc.addIceCandidate(candidate);
-                    console.log("Successfully added ICE candidate:", candidate);
+                    // console.log("Successfully added ICE candidate:", candidate);
                 } catch (err) {
                     console.error("Failed to add ICE candidate:", err, candidate);
                     // Можно вернуть кандидат обратно в очередь или обработать ошибку
@@ -68,16 +80,16 @@ export class RoomService {
             }
         })
 
-        this.ws.addEventListener("message", async (event) => {
+        this.ws!.addEventListener("message", async (event) => {
             const d = JSON.parse(event.data)
             switch (d.type) {
                 case "sdp": {
                     const sdp: RTCSessionDescription = d.playground
                     // 0. Проверка состояния
-                    console.log(this.pc!.signalingState)
-                    if (this.pc!.signalingState !== "stable") {
-                        await this.pc!.setLocalDescription({ type: "rollback" });
-                    }
+                    // console.log(this.pc!.signalingState)
+                    // if (this.pc!.signalingState !== "stable") {
+                    //     await this.pc!.setLocalDescription({ type: "rollback" });
+                    // }
 
                     await this.pc!.setRemoteDescription(sdp);
                     emitter.emit("onRemoteDescriptionChanged", sdp);
@@ -100,39 +112,47 @@ export class RoomService {
             }
         })
 
-        this.pc = new RTCPeerConnection({
-            iceServers: [
-                {
-                    urls: ['stun:stun.l.google.com:19302', 'stun:stun.l.google.com:5349', 'stun:stun1.l.google.com:3478']
+        let stream: MediaStream;
+        if (!this.pc) {
+            this.pc = new RTCPeerConnection({
+                iceServers: [
+                    {
+                        urls: ['stun:stun.l.google.com:19302', 'stun:stun.l.google.com:5349', 'stun:stun1.l.google.com:3478']
+                    }
+                ]
+            });
+
+            this.pc!.addEventListener("connectionstatechange", (e) => {
+                if (["closed", "failed"].includes(this.pc!.connectionState)) {
+                    this.pc = undefined;
+                    emitter.emit("closed", e)
                 }
-            ]
-        });
+            })
 
-        this.pc!.onconnectionstatechange = (e) => {
-            if (["closed", "failed"].includes(this.pc!.connectionState)) {
-                this.pc = undefined;
-                emitter.emit("closed", e)
+            this.pc!.onicecandidate = async (event) => {
+                if (!event.candidate || this.pc!.iceConnectionState === "connected") {
+                    return
+                }
+                await this.candidate(event.candidate, user, room);
             }
-        }
 
-        this.pc!.onicecandidate = async (event) => {
-            if (!event.candidate) {
-                return
+            this.pc!.onnegotiationneeded = async (e) => {
+                console.log('negotiationneeded', e)
+                await this.renegotiation(false, room, user);
             }
-            await this.candidate(event.candidate, user, room);
-        }
 
-        this.pc!.onnegotiationneeded = e => {
-            console.log('negotiationneeded', e)
-            this.renegotiation(room, user);
+            const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: false})
+            stream.getTracks().forEach(track => this.pc!.addTrack(track, stream));
+
+            this.stream = stream;
+        } else {
+            await this.renegotiation(true, room, user);
         }
 
         // pc.addTransceiver('video')
 
-        const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: false})
-        stream.getTracks().forEach(track => this.pc!.addTrack(track, stream));
 
-        return {pc: this.pc!, localStream: stream, emitter: emitter}
+        return {pc: this.pc!, localStream: this.stream!, emitter: emitter}
     }
 
     private async candidate(candidate: RTCIceCandidate, user: User, room: string) {
@@ -156,9 +176,14 @@ export class RoomService {
     }
 
 
-    private async createOffer(room_id: string, user: User) {
-        const offer = await this.pc?.createOffer()
-        await this.pc?.setLocalDescription(offer)
+    private async createOffer(iceRestart: boolean, room_id: string, user: User) {
+        const offer = await this.pc?.createOffer({iceRestart})
+        try {
+            await this.pc?.setLocalDescription(offer)
+        } catch (error) {
+            console.error(error)
+            return
+        }
         const resp = await this.axiosClient.post<{answer: RTCSessionDescription}>("/offer", {offer, room_id}, {
             headers: {
                 'Content-Type': 'application/json',
@@ -169,8 +194,8 @@ export class RoomService {
         return resp.data.answer
     }
 
-    private async renegotiation(room: string, user: User) {
-        await this.createOffer(room, user);
+    private async renegotiation(iceRestart: boolean, room: string, user: User) {
+        await this.createOffer(iceRestart, room, user);
     }
 }
 

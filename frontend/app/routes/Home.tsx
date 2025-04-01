@@ -35,18 +35,21 @@ function JoinRoom({}) {
 
     const onTrack = useCallback((track: RTCTrackEvent) => {
         track.streams.forEach((s) => {
-            // s.addEventListener("removetrack", () => {
-            //     console.log("remove track")
-            //     const index = tracks.indexOf(track);
-            //     setTracks([...tracks.slice(0, index), ...tracks.slice(index + 1)]);
-            // })
+            console.log(s.getTracks())
+            s.getTracks()[0].addEventListener("ended", () => {
+                console.log("onended");
+                const index = tracks.indexOf(track);
+                setTracks([...tracks.slice(0, index), ...tracks.slice(index + 1)]);
+            })
         })
 
-        console.log("onTrack", track)
-        setTracks([...tracks, track])
-    }, [tracks])
+        setTracks((tracks) => {
+            console.log("onTrack", tracks)
+            return [...tracks, track]
+        } )
+    }, [])
 
-    const onSubmit = async (data: Inputs) => {
+    const onSubmit = useCallback(async (data: Inputs) => {
         let webrtcSession
         try {
             webrtcSession = await roomService.createSession(data.room_name, user!)
@@ -56,21 +59,22 @@ function JoinRoom({}) {
             return
         }
         webrtcSession.pc.ontrack = onTrack
-        webrtcSession.pc.onconnectionstatechange = () => {
+        webrtcSession.pc.addEventListener("connectionstatechange", () => {
             console.log("onconnectionstatechange " + webrtcSession.pc.connectionState)
             if (webrtcSession.pc.connectionState === "connected") {
                 setConnected(true)
             }
-        }
+        })
         webrtcSession.emitter.once("closed", () => {
             setConnected(false);
             setTracks([]);
         })
-    }
+    }, [])
 
+    const conn = connected && tracks.length > 0
     return (
         <div>
-            {connected ? null : <form onSubmit={handleSubmit(onSubmit)} className="text-center p-4">
+            {conn ? null : <form onSubmit={handleSubmit(onSubmit)} className="text-center p-4">
                 <input type="text" {...register("room_name")}/>
                 <button type="submit">Join to room</button>
             </form>}
@@ -79,7 +83,7 @@ function JoinRoom({}) {
                 minHeight: '500px',
                 background: "black",
                 borderRadius: "15px",
-                display: connected ? "block" : "none",
+                display: conn ? "block" : "none",
             }}>
                 <div style={{
                     width: "140px",
@@ -108,6 +112,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         e.preventDefault();
         setUser(null);
         localStorage.removeItem("session"); // TODO refactoring
+        // TODO roomService.ws.close();
     }, [])
 
     return (

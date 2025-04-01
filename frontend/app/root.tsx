@@ -12,6 +12,7 @@ import "./app.css";
 import {AuthProvider} from "~/context/session";
 
 export function Layout({ children }: { children: React.ReactNode }) {
+
   return (
     <html lang="en">
     <head>
@@ -19,7 +20,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <meta name="viewport" content="width=device-width, initial-scale=1"/>
       <Meta/>
       <Links/>
-
+      {import.meta.env.DEV ? <script src="http://localhost:8097"></script> : null}
       <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css"/>
       {/*<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/digitallytailored/classless@latest/classless.min.css"/>*/}
     </head>

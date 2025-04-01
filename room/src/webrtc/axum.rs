@@ -17,9 +17,12 @@ use crate::webrtc::sfu::{Signalling, SFU};
 use futures::{SinkExt, StreamExt};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use anyhow::{Result};
+use anyhow::__private::kind::TraitKind;
 use axum::middleware::from_extractor;
 use http::StatusCode;
 use jsonwebtoken::DecodingKey;
+use jsonwebtoken::errors::ErrorKind;
+use log::error;
 use thiserror::Error;
 use crate::webrtc::extract::{Claims, JWT};
 
@@ -197,6 +200,21 @@ struct AppError(anyhow::Error);
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
+        error!(err:? = self.0; "Failed response");
+
+        if let Some(jwt_err) = self.0.downcast_ref::<jsonwebtoken::errors::Error>() {
+            match jwt_err.kind() {
+                ErrorKind::ExpiredSignature => {
+                    return (
+                        StatusCode::UNAUTHORIZED,
+                        format!("token expired"),
+                    )
+                        .into_response();
+                },
+                _ => {},
+            }
+        };
+
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Something went wrong: {}", self.0),
