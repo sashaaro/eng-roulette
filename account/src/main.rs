@@ -17,9 +17,13 @@ use crate::application::account::Application;
 use crate::infra::auth::AuthManager;
 use sqlx::{Pool, Postgres};
 use actix_web::web::{Data, ServiceConfig};
+use actix_cors::Cors;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    std::env::set_var("RUST_LOG", "debug");
+    env_logger::init();
+
     let pool = infra::db::pg().await;
 
     let port = env::var_os("HTTP_PORT")
@@ -27,14 +31,27 @@ async fn main() -> std::io::Result<()> {
             .expect("invalid port")
             .to_string().parse::<u16>()
             .expect("invalid port"))
-        .unwrap_or(8080);
+        .unwrap_or(8081);
 
     println!("Start server on port {}", port);
 
     HttpServer::new(move || {
-        App::new().configure(config_app(pool.clone()))
+        let cors = Cors::default()
+            .send_wildcard()
+            .allowed_origin_fn(|origin, _req_head| {
+                true
+            }) // TODO only for dev
+            .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
+            .allowed_headers(vec![
+                actix_web::http::header::CONTENT_TYPE,
+                actix_web::http::header::ACCEPT,
+                actix_web::http::header::AUTHORIZATION,
+            ])
+            .max_age(3600);
+
+        App::new().configure(config_app(pool.clone())).wrap(cors)
     })
-    .bind(("127.0.0.1", port))?
+    .bind(("0.0.0.0", port))?
     .run()
     .await
 }
@@ -65,6 +82,7 @@ fn config_app(pool: Pool<Postgres>) -> Box<dyn Fn(&mut ServiceConfig)> {
         cfg.app_data(auth_manager)
             .app_data(app)
             .service(infra::routes::get_account)
+            .service(infra::routes::new_get_account)
             .service(infra::routes::buypremium)
             .service(infra::routes::register)
             .service(infra::routes::login)

@@ -45,7 +45,7 @@ impl Error for UserNotFoundError{}
 
 #[async_trait]
 impl repository::UserRepository for PgUserRepository {
-    async fn create_user(&self, username: String, password: String) -> Result<User, Box<dyn Error>> {
+    async fn create_user(&self, username: String, password: String) -> anyhow::Result<User> {
         let result = sqlx::query(
             &*format!("INSERT INTO \"user\"(username, password) VALUES ($1, $2) RETURNING id;"),
         )
@@ -63,27 +63,29 @@ impl repository::UserRepository for PgUserRepository {
         })
     }
 
-    async fn find_user(&self, id: i64) -> Result<Option<User>, Box<dyn Error>> {
+    async fn find_by_username(&self, username: &str) -> anyhow::Result<Option<User>> {
+        let row = sqlx::query(
+            "SELECT * FROM \"user\" WHERE username = $1",
+        ).bind(username).fetch_one(&self.pool).await;
+        match row {
+            Ok(row) => {
+                Ok(Some(row.into()))
+            },
+            Err(RowNotFound) => Ok(None),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    async fn find(&self, id: i64) -> anyhow::Result<Option<User>> {
         let row = sqlx::query(
             "SELECT * FROM \"user\" WHERE id = $1",
         ).bind(id).fetch_one(&self.pool).await;
         match row {
             Ok(row) => {
-                let u = User {
-                    id: row.get("id"),
-                    username: row.get("username"),
-                    password: "".to_string(),
-                    is_active: row.get("is_active"),
-                    premium_until: row.get("premium_until"),
-                };
-                Ok(Some(u))
+                Ok(Some(row.into()))
             },
-            Err(err) => {
-                match err {
-                    RowNotFound => Ok(None),
-                    _ => Err(Box::try_from(err).unwrap())
-                }
-            }
+            Err(RowNotFound) => Ok(None),
+            Err(err) => Err(err.into()),
         }
     }
 

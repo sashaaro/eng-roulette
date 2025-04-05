@@ -1,105 +1,60 @@
-use axum::{
-    routing::{get, post},
-    http::StatusCode,
-    Json, Router,
-};
-use serde::{Deserialize, Serialize};
 use clap::Parser;
-use tracing_subscriber::fmt::format;
+use env_logger::Builder;
+use log::LevelFilter;
+use std::io::Write;
+use env_logger::fmt::default_kv_format;
+
+mod webrtc;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// Number of times to greet
-    #[arg(short, long, default_value_t = 8080)]
+    #[arg(short, long, default_value_t = 8082
+    )]
     pub port: u16,
-}
 
-fn app() -> Router {
-    let app = Router::new()
-        // `GET /` goes to `root`
-        .route("/", get(root))
-        // `POST /users` goes to `create_user`
-        .route("/users", post(create_user));
-
-    app
+    #[arg(short, long, default_value_t = false)]
+    pub webrtc: bool,
 }
 
 #[tokio::main]
-async fn main() {
-    // initialize tracing
-    tracing_subscriber::fmt::init();
-
+async fn main() -> anyhow::Result<()> {
+    Builder::new()
+        .filter(None, LevelFilter::Info)
+        .filter(Some("webrtc::peer_connection"), LevelFilter::Error)
+        .filter(Some("webrtc_ice::mdns"), LevelFilter::Error)
+        .filter(Some("webrtc_mdns::conn"), LevelFilter::Error)
+        .filter(Some("webrtc_ice::agent::agent_internal"), LevelFilter::Error)
+        .filter(Some("webrtc_ice::agent::agent_gather"), LevelFilter::Error)
+        .filter(Some("webrtc_srtp::session"), LevelFilter::Warn)
+        .init();
 
     let args = Args::parse();
-
-    // build our application with a route
-
-
-    // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await.unwrap();
-    axum::serve(listener, app()).await.unwrap();
+    let app = webrtc::axum::create_sfu_router().await;
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await?;
+    Ok(axum::serve(listener, app).await?)
 }
-
-// basic handler that responds with a static string
-async fn root() -> &'static str {
-    "Hello, World!"
-}
-
-async fn create_user(
-    // this argument tells axum to parse the request body
-    // as JSON into a `CreateUser` type
-    Json(payload): Json<CreateUser>,
-) -> (StatusCode, Json<User>) {
-    // insert your application logic here
-    let user = User {
-        id: 1337,
-        username: payload.username,
-    };
-
-    // this will be converted into a JSON response
-    // with a status code of `201 Created`
-    (StatusCode::CREATED, Json(user))
-}
-
-// the input to our `create_user` handler
-#[derive(Deserialize)]
-struct CreateUser {
-    username: String,
-}
-
-// the output to our `create_user` handler
-#[derive(Serialize)]
-struct User {
-    id: u64,
-    username: String,
-}
-
-
-
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use axum::{
         body::Body,
-        extract::connect_info::MockConnectInfo,
-        http::{self, Request, StatusCode},
+        http::{Request, StatusCode},
     };
-    use serde_json::{json, Value};
-    use tokio::net::TcpListener;
-    use tower::{Service, ServiceExt}; // for `call`, `oneshot`, and `ready`
+    use tower::{Service, ServiceExt};
+    use crate::webrtc::axum::create_sfu_router;
 
     #[tokio::test]
     async fn hello_world() {
-        let app = app();
+        let app = create_sfu_router().await;
 
         // `Router` implements `tower::Service<Request<Body>>` so we can
         // call it like any tower service, no need to run an HTTP server.
         let response = app
-            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+            .oneshot(Request::builder().uri("/version").body(Body::empty()).unwrap())
             .await
             .unwrap();
 

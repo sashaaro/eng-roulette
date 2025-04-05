@@ -3,6 +3,7 @@ use actix_web::{get, HttpRequest, HttpResponse, post, Responder, web};
 use jsonwebtoken;
 use crate::domain::repository::UserRepository;
 use serde::{Deserialize, Serialize};
+use crate::application::account::AppError::NotFound;
 use crate::application::account::Application;
 use crate::infra::auth::{AuthManager, Claims};
 
@@ -18,7 +19,7 @@ pub(crate) struct RegisterResp{
     pub token: String,
 }
 
-const JWT_TTL: i64= 60;
+const JWT_TTL: i64 = 60 * 60;
 
 #[post("/register")]
 async fn register(
@@ -47,7 +48,7 @@ async fn register(
             HttpResponse::NotFound().body(format!("err: {:?}", err))
         }
     }
- }
+}
 
 #[post("/login")]
 async fn login(
@@ -83,7 +84,8 @@ async fn login(
 #[get("/me")]
 async fn me(
     req: HttpRequest,
-    auth_manager: web::Data<AuthManager>
+    auth_manager: web::Data<AuthManager>,
+    app: web::Data<Application>,
 ) -> impl Responder {
     let token = auth_manager.fetch_claims_from_req(&req);
 
@@ -91,7 +93,14 @@ async fn me(
         return HttpResponse::BadRequest().body(format!("err: {:?}", token.err()));
     }
 
-     HttpResponse::Ok().body(token.unwrap().sub.to_string())
+    let user = app.me(token.unwrap().sub).await;
+
+    if user.is_err() {
+        return HttpResponse::InternalServerError().body("err");
+    }
+    let user = user.unwrap();
+
+    HttpResponse::Ok().json(user)
 }
 
 
@@ -111,14 +120,19 @@ async fn buypremium(
 
 #[get("/account/{id}")]
 async fn get_account(
-    user_repo: web::Data<dyn UserRepository>,
+    //user_repo: web::Data<dyn UserRepository>,
     id: web::Path<i64>
 ) -> impl Responder {
-    let user = user_repo.find_user(id.into_inner()).await;
 
-    match user {
-        Ok(None) => HttpResponse::NotFound().body("user not found"),
-        Ok(user) => HttpResponse::Ok().json(user),
-        Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err))
-    }
+    HttpResponse::Ok().body("user not found")
+}
+
+
+#[get("/api/account/account/{id}")]
+async fn new_get_account(
+    //user_repo: web::Data<dyn UserRepository>,
+    id: web::Path<i64>
+) -> impl Responder {
+
+    HttpResponse::Ok().body("new user not found")
 }

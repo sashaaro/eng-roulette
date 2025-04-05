@@ -1,0 +1,21 @@
+entryPoints:
+  # web:
+  # address: ":80"
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: leresolver
+        domains:
+          - main: botenza.org
+            sans:
+              - traefik.botenza.org
+              - roullette.botenza.org
+
+providers:
+  docker: {}
+  file:
+    filename: ./traefik.yml
+
+api:
+  insecure: false

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub(crate) sub: i32,
+    pub(crate) sub: i64,
     pub(crate) exp: i64,
 }
 
