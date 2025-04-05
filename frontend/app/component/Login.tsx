@@ -38,16 +38,10 @@ export default function Login({register_mode} : {register_mode: boolean}){
     }
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)}>
-            <div>
-                <input type="text" {...register("username")}/>
-            </div>
-            <div>
-                <input type="password" {...register("password")}/>
-            </div>
-            <div>
-                <button type="submit">{register_mode ? 'Register' : 'Login'}</button>
-            </div>
+        <form className="login-form" onSubmit={handleSubmit(onSubmit)}>
+            <input className="form-control" type="text" placeholder={"username"} {...register("username")}/>
+            <input className="form-control" type="password" placeholder={"password"} {...register("password")}/>
+            <button className="btn btn-lg btn-primary btn-block" type="submit">{register_mode ? 'Create account' : 'Sign in'}</button>
         </form>
     );
 }

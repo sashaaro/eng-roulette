@@ -12,10 +12,10 @@ export default function LoginPage({ loaderData }: Route.ComponentProps) {
 
 
     return (
-        <div className="text-center p-4">
-            <h1 className="text-3xl font-bold underline">
-                Login
-            </h1>
+        <div className="form-signin">
+            <div className="h3 mb-3 font-weight-normal">
+                Please sign in
+            </div>
             <Login register_mode={false}/>
         </div>
     );

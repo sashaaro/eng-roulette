@@ -76,20 +76,19 @@ function JoinRoom({}) {
         }
     }, []);
 
-    const connected = (connState === "connected" || connState === "connecting") && tracks.length > 0
+    const connected = (connState === "connected" || connState === "connecting")
     return (
-        <div>
-            {connected ? null : <form onSubmit={handleSubmit(onSubmit)} className="text-center p-4">
-                <input type="text" {...register("room_name")}/>
-                <button type="submit">Join to room</button>
+        <div className="join-room">
+            {connected ? null : <form onSubmit={handleSubmit(onSubmit)} className="join-room-form p-4">
+                <div>
+                    <label htmlFor="room_name">Room Name</label>
+                    <input type="text" className="form-control" {...register("room_name")}/>
+                </div>
+                <div>
+                    <button type="submit" className="btn btn-success">Join to room</button>
+                </div>
             </form>}
-            <div style={{
-                position: 'relative',
-                minHeight: '500px',
-                background: "black",
-                borderRadius: "15px",
-                display: connected ? "block" : "none",
-            }}>
+            {connected ? <div className="room">
                 <div style={{
                     width: "140px",
                     position: "absolute",
@@ -105,7 +104,7 @@ function JoinRoom({}) {
                         <VideoSrc muted srcObject={track.streams[0]} autoPlay={true}/>
                     </div>
                 ))}
-            </div>
+            </div> : null}
         </div>
     );
 }
@@ -121,19 +120,18 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     }, [])
 
     return (
-        <div className="text-center p-4">
-            <h1 className="text-3xl font-bold underline">
-                {user ?
-                    <div>
-                        <div title={user.id + ''}>Hi {user.username}</div><a href="#" onClick={onExit}>Exit</a>
-                    </div>
-                    : null}
-            </h1>
-            {user ? <JoinRoom/> : <nav>
-                <div><Link to={"/login"}>Login</Link></div>
-                <div><Link to={"/register"}>Register</Link></div>
-            </nav>}
-
+        <div>
+            <ul className="nav flex-column">
+                <li className="nav-item"><Link className="nav-link" to={"/login"}>Login</Link></li>
+                <li className="nav-item"><Link className="nav-link" to={"/register"}>Register</Link></li>
+                {user ? <li className="nav-item"><a className="nav-link" href="#" onClick={onExit}>Exit</a></li>: null}
+            </ul>
+            <div>
+                {user ? <div>
+                    <div className="text-center h3">Hi {user.username}</div>
+                    <JoinRoom/>
+                </div> : null}
+            </div>
         </div>
     );
 }

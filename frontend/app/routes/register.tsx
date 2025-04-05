@@ -12,10 +12,10 @@ export default function RegisterPage({ loaderData }: Route.ComponentProps) {
 
 
     return (
-        <div className="text-center p-4">
-            <h1 className="text-3xl font-bold underline">
-                Register new user
-            </h1>
+        <div className="form-signin">
+            <div className="h3 mb-3 font-weight-normal">
+                Please register an account
+            </div>
             <Login register_mode={true}/>
         </div>
     );
