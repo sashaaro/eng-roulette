@@ -75,9 +75,9 @@ async fn commit_expense(tx_repo: &State<Box<dyn TxRepository>>, data: Json<Commi
 async fn main() -> Result<(), rocket::Error> {
     let mut pool = infra::db::pg().await;
     let repo: Box<dyn TxRepository> = Box::new(PgTxRepository::new(pool.clone()));
-    let journalRepo: PgJournalRepository = PgJournalRepository::new(pool.clone());
+    let journal_repo: PgJournalRepository = PgJournalRepository::new(pool.clone());
 
-    journalRepo.log().await.unwrap();
+    journal_repo.log().await.unwrap();
     //let d: Box<dyn TxRepository + Send> = Box::new(repo);
 
     //let res = application::commands::income(d, 1, 2).await;

@@ -23,11 +23,12 @@ pub struct Args {
 async fn main() -> anyhow::Result<()> {
     Builder::new()
         .filter(None, LevelFilter::Info)
-        .filter(Some("webrtc::peer_connection"), LevelFilter::Error) // Disable all logs
-        .filter(Some("webrtc_ice::mdns"), LevelFilter::Error) // Disable all logs
-        .filter(Some("webrtc_mdns::conn"), LevelFilter::Error) // Disable all logs
-        .filter(Some("webrtc_ice::agent::agent_internal"), LevelFilter::Error) // Disable all logs
-        .filter(Some("webrtc_ice::agent::agent_gather"), LevelFilter::Error) // Disable all logs
+        .filter(Some("webrtc::peer_connection"), LevelFilter::Error)
+        .filter(Some("webrtc_ice::mdns"), LevelFilter::Error)
+        .filter(Some("webrtc_mdns::conn"), LevelFilter::Error)
+        .filter(Some("webrtc_ice::agent::agent_internal"), LevelFilter::Error)
+        .filter(Some("webrtc_ice::agent::agent_gather"), LevelFilter::Error)
+        .filter(Some("webrtc_srtp::session"), LevelFilter::Warn)
         .init();
 
     let args = Args::parse();

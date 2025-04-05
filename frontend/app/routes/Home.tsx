@@ -28,10 +28,10 @@ function JoinRoom({}) {
     }, [])
 
     const [tracks, setTracks] = useState<Array<RTCTrackEvent>>([])
-    const [localSteam, stLocalStream] = useState<MediaStream>()
+    const [localSteam, setLocalStream] = useState<MediaStream>()
     const {user} = useAuth()
 
-    const [connected, setConnected] = useState(false)
+    const [connState, setConnState] = useState<RTCPeerConnectionState>("new")
 
     const onTrack = useCallback((track: RTCTrackEvent) => {
         track.streams.forEach((s) => {
@@ -53,7 +53,7 @@ function JoinRoom({}) {
         let webrtcSession
         try {
             webrtcSession = await roomService.createSession(data.room_name, user!)
-            stLocalStream(webrtcSession.localStream)
+            setLocalStream(webrtcSession.localStream)
         } catch (err) {
             alert(err)
             return
@@ -61,20 +61,25 @@ function JoinRoom({}) {
         webrtcSession.pc.ontrack = onTrack
         webrtcSession.pc.addEventListener("connectionstatechange", () => {
             console.log("onconnectionstatechange " + webrtcSession.pc.connectionState)
-            if (webrtcSession.pc.connectionState === "connected") {
-                setConnected(true)
-            }
+            setConnState(webrtcSession.pc.connectionState)
         })
-        webrtcSession.emitter.once("closed", () => {
-            setConnected(false);
-            setTracks([]);
-        })
+        // webrtcSession.emitter.once("closed", () => {
+        //     setConnState(false);
+        //     setTracks([]);
+        // })
     }, [])
 
-    const conn = connected && tracks.length > 0
+    useEffect(() => {
+
+        return () => {
+
+        }
+    }, []);
+
+    const connected = (connState === "connected" || connState === "connecting") && tracks.length > 0
     return (
         <div>
-            {conn ? null : <form onSubmit={handleSubmit(onSubmit)} className="text-center p-4">
+            {connected ? null : <form onSubmit={handleSubmit(onSubmit)} className="text-center p-4">
                 <input type="text" {...register("room_name")}/>
                 <button type="submit">Join to room</button>
             </form>}
@@ -83,7 +88,7 @@ function JoinRoom({}) {
                 minHeight: '500px',
                 background: "black",
                 borderRadius: "15px",
-                display: conn ? "block" : "none",
+                display: connected ? "block" : "none",
             }}>
                 <div style={{
                     width: "140px",
