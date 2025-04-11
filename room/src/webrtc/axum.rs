@@ -17,7 +17,6 @@ use crate::webrtc::sfu::{Signalling, SFU};
 use futures::{SinkExt, StreamExt};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use anyhow::{Result};
-use anyhow::__private::kind::TraitKind;
 use axum::middleware::from_extractor;
 use http::StatusCode;
 use jsonwebtoken::DecodingKey;

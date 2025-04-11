@@ -1,22 +1,17 @@
-use actix_web::{App, HttpServer, web};
-use crate::infra::repository::{PgPremiumRepository, PgUserRepository};
-use crate::infra::service::InternalBillingService;
-
 mod infra;
 mod domain;
 mod application;
 mod test;
 
+use actix_web::{App, HttpServer, web};
+use crate::infra::repository::{PgPremiumRepository, PgUserRepository};
+use crate::infra::service::InternalBillingService;
 use std::env;
-use std::fmt::{Display};
-use std::net::{ToSocketAddrs};
-use std::ops::Add;
 use std::sync::Arc;
-use rand::prelude::*;
 use crate::application::account::Application;
 use crate::infra::auth::AuthManager;
 use sqlx::{Pool, Postgres};
-use actix_web::web::{Data, ServiceConfig};
+use actix_web::web::{ServiceConfig};
 use actix_cors::Cors;
 
 #[actix_web::main]
@@ -38,7 +33,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         let cors = Cors::default()
             .send_wildcard()
-            .allowed_origin_fn(|origin, _req_head| {
+            .allowed_origin_fn(|_, _| {
                 true
             }) // TODO only for dev
             .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
@@ -81,8 +76,6 @@ fn config_app(pool: Pool<Postgres>) -> Box<dyn Fn(&mut ServiceConfig)> {
 
         cfg.app_data(auth_manager)
             .app_data(app)
-            .service(infra::routes::get_account)
-            .service(infra::routes::new_get_account)
             .service(infra::routes::buypremium)
             .service(infra::routes::register)
             .service(infra::routes::login)

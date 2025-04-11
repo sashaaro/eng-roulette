@@ -23,13 +23,11 @@ use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
 use webrtc::track::track_local::{TrackLocalWriter};
 use webrtc::track::track_remote::TrackRemote;
 use webrtc::Error;
-use tokio_util::sync::CancellationToken;
 use webrtc::Error::ErrNoRemoteDescription;
 
 pub struct Participant {
     pub(crate) session_id: String,
     pub(crate) pc: RTCPeerConnection,
-    pub(crate) cancel: CancellationToken,
 }
 
 
@@ -80,7 +78,7 @@ impl SFU {
         let room = self.rooms.lock().await.entry(room_id.clone()).or_default().clone();
         let mut room_map = room.lock().await;
 
-        let mut peer: Arc<Participant>;
+        let peer: Arc<Participant>;
         if room_map.contains_key(&session_id) {
             return match room_map.get(&session_id) {
                 Some(peer) => Ok(peer.clone()),
@@ -92,11 +90,14 @@ impl SFU {
         peer = Arc::new(Participant {
             session_id: session_id.clone(),
             pc: pc,
-            cancel: CancellationToken::new(),
         });
 
         room_map.insert(peer.session_id.clone(), Arc::clone(&peer));
-        self.clone().participants.lock().await.insert(peer.session_id.clone(), Arc::clone(&peer));
+        let mut participants = self.participants.lock().await;
+        if let Some(participant) = participants.get(&session_id) {
+            _ = participant.pc.close().await;
+        }
+        participants.insert(session_id.clone(), Arc::clone(&peer));
 
         let this = self.clone();
         let session_id = session_id.clone();
@@ -151,7 +152,8 @@ impl SFU {
                     _ => {}
                 }
 
-                let peers = this.participants.lock().await.iter().map(|(_, p)| session_id.clone()).collect::<Vec<String>>(); // TODO stop clone session_id
+                let peers = this.participants.lock().await.iter()
+                    .map(|(_, p)| p.session_id.clone()).collect::<Vec<String>>();
                 info!(
                         user:? = session_id,
                         room:? = room_id2.clone(),
@@ -202,7 +204,6 @@ impl SFU {
         }
         let room = room.unwrap();
 
-        let room_id = room_id.clone();
         let media_ssrc = new_track.ssrc();
 
         let peer2 = peer.clone();
@@ -215,7 +216,7 @@ impl SFU {
                 tokio::select! {
                     _ = timeout.as_mut() =>{
                         if let Some(pc) = peer.upgrade(){
-                            println!("strong count {:?}", Arc::strong_count(&pc));
+                            // println!("strong count {:?}", Arc::strong_count(&pc));
 
                             result = pc.pc.write_rtcp(&[Box::new(PictureLossIndication{
                                 sender_ssrc: 0,
@@ -245,22 +246,9 @@ impl SFU {
             participants.for_each(|(_, participant)| {
                 let new_track = Arc::clone(&new_track);
                 let participant = Arc::clone(&participant);
-                let participant2 = Arc::clone(&participant);
                 let this = this.clone();
                 tokio::spawn(async move {
-                    // TODO pass cancel signal after peer exit
-
                     this.send_track_to_participant(new_track, participant).await;
-
-                    // if !senders.is_empty() {
-                    //     let sender = senders.get(0).unwrap();
-                    //     match participant2.rtp_peer.remove_track(sender).await {
-                    //         Ok(_) => {}
-                    //         Err(e) => {
-                    //             error!(user:? = p.session_id.clone(), err:? = e; "Failed to remove track");
-                    //         }
-                    //     }
-                    // }
                 });
             });
         }
@@ -292,11 +280,11 @@ impl SFU {
 
     pub(crate) async fn accept_answer(&self, session_id: String, answer: RTCSessionDescription, room_id: String) -> Result<()> {
         let Some(room) = self.rooms.lock().await.get(&room_id).cloned() else {
-            return bail!("room not found");
+            bail!("room not found")
         };
 
         let Some(peer) = room.lock().await.get(&session_id).cloned() else {
-            return bail!("No peer found for this session");
+            bail!("No peer found for this session")
         };
 
         peer.pc.set_remote_description(answer).await?;
@@ -358,7 +346,6 @@ impl SFU {
         // print!("send rtp to {} -> {}", &session_id3, &other_session);
         // Read RTP packets being sent to webrtc-rs
 
-        let session_id = dist2.session_id.clone();
         let dist_track = Arc::downgrade(&dist_track);
         while let Ok((rtp, _)) = track.read_rtp().await {
             if let Some(dist_track) = dist_track.upgrade() {

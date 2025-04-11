@@ -10,12 +10,6 @@ pub struct PgRoomRepository {
     pub pool: Pool<Postgres>,
 }
 
-impl PgRoomRepository {
-    pub async fn sum(&self) -> i64 {
-        let row: (i64, ) = sqlx::query_as("SELECT $1 + 100").bind(150_i64).fetch_one(&self.pool).await.unwrap();
-        return row.0
-    }
-}
 #[async_trait]
 impl repository::RoomRepository for PgRoomRepository {
     async fn all(&self) -> Vec<Room> {

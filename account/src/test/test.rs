@@ -1,18 +1,10 @@
-use std::sync::Arc;
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use actix_web::{test, web, App, HttpMessage};
+    use actix_web::{test, App};
     use actix_web::body::to_bytes;
     use actix_web::http::header::ContentType;
-    use serde_json::Value::String;
     use sqlx::Executor;
-    use crate::application::account::Application;
-    use crate::{config_app, infra};
-    use crate::infra::auth::AuthManager;
-    use crate::infra::repository::{PgPremiumRepository, PgUserRepository};
-    use crate::infra::service::InternalBillingService;
+    use crate::{config_app};
     use crate::infra::db;
     use crate::infra::routes::RegisterResp;
 

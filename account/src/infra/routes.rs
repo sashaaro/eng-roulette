@@ -1,9 +1,5 @@
-use std::ops::Deref;
 use actix_web::{get, HttpRequest, HttpResponse, post, Responder, web};
-use jsonwebtoken;
-use crate::domain::repository::UserRepository;
 use serde::{Deserialize, Serialize};
-use crate::application::account::AppError::NotFound;
 use crate::application::account::Application;
 use crate::infra::auth::{AuthManager, Claims};
 
@@ -53,7 +49,7 @@ async fn register(
 #[post("/login")]
 async fn login(
     req_body: String,
-    req: HttpRequest,
+    _: HttpRequest,
     auth_manager: web::Data<AuthManager>,
     app: web::Data<Application>,
 ) -> impl Responder {
@@ -77,7 +73,7 @@ async fn login(
     });
 
     HttpResponse::Ok().json(&RegisterResp{
-        token: token
+        token
     })
 }
 
@@ -116,23 +112,4 @@ async fn buypremium(
         }
     }
     // HttpResponse::Ok().body("ok")
-}
-
-#[get("/account/{id}")]
-async fn get_account(
-    //user_repo: web::Data<dyn UserRepository>,
-    id: web::Path<i64>
-) -> impl Responder {
-
-    HttpResponse::Ok().body("user not found")
-}
-
-
-#[get("/api/account/account/{id}")]
-async fn new_get_account(
-    //user_repo: web::Data<dyn UserRepository>,
-    id: web::Path<i64>
-) -> impl Responder {
-
-    HttpResponse::Ok().body("new user not found")
 }

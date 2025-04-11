@@ -107,24 +107,24 @@ mod test {
 
     #[tokio::test]
     async fn test_extract() {
-        let app = Router::new()
-            .layer(from_extractor::<JWT>())
-            .route(
-            "/",
-            get(async |JWT(clams)| "ok"),
-        );
+        // let app = Router::new()
+        //     .layer(from_extractor::<JWT>())
+        //     .route(
+        //     "/",
+        //     get(async |JWT(clams)| "ok"),
+        // );
+        //
+        // return;
 
-        return;
-
-        let client = TestClient::new(app);
-
-        let res = client.get("/").await;
-        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-
-        let res = client
-            .get("/")
-            .header(http::header::AUTHORIZATION, "secret")
-            .await;
-        assert_eq!(res.status(), StatusCode::OK);
+        // let client = TestClient::new(app);
+        //
+        // let res = client.get("/").await;
+        // assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        //
+        // let res = client
+        //     .get("/")
+        //     .header(http::header::AUTHORIZATION, "secret")
+        //     .await;
+        // assert_eq!(res.status(), StatusCode::OK);
     }
 }

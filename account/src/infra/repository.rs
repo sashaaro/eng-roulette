@@ -1,14 +1,10 @@
-use std::any::Any;
 use std::error::Error;
 use std::fmt;
-use std::time::SystemTime;
-use actix_web::error::{DispatchError, ErrorUnauthorized};
 use async_trait::async_trait;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{Utc};
 use crate::domain::repository;
-use sqlx::{Executor, Pool, Postgres, Row};
+use sqlx::{Pool, Postgres, Row};
 use sqlx::Error::RowNotFound;
-use sqlx::postgres::PgRow;
 use crate::domain::models::{User};
 use crate::domain::repository::Tx2pcID;
 
@@ -24,11 +20,6 @@ impl PgUserRepository {
         PgUserRepository {
             pool,
         }
-    }
-
-    pub async fn sum(&self) -> i64 {
-        let row: (i64, ) = sqlx::query_as("SELECT $1 + 100").bind(150_i64).fetch_one(&self.pool).await.unwrap();
-        return row.0
     }
 }
 
@@ -68,9 +59,7 @@ impl repository::UserRepository for PgUserRepository {
             "SELECT * FROM \"user\" WHERE username = $1",
         ).bind(username).fetch_one(&self.pool).await;
         match row {
-            Ok(row) => {
-                Ok(Some(row.into()))
-            },
+            Ok(row) => Ok(Some(row.into())),
             Err(RowNotFound) => Ok(None),
             Err(err) => Err(err.into()),
         }
@@ -81,35 +70,9 @@ impl repository::UserRepository for PgUserRepository {
             "SELECT * FROM \"user\" WHERE id = $1",
         ).bind(id).fetch_one(&self.pool).await;
         match row {
-            Ok(row) => {
-                Ok(Some(row.into()))
-            },
+            Ok(row) => Ok(Some(row.into())),
             Err(RowNotFound) => Ok(None),
             Err(err) => Err(err.into()),
-        }
-    }
-
-    async fn find_username(&self, username: &str) -> Result<Option<User>, Box<dyn Error>> {
-        let row = sqlx::query(
-            "SELECT * FROM \"user\" WHERE username = $1",
-        ).bind(username).fetch_one(&self.pool).await;
-        match row {
-            Ok(row) => {
-                let u = User {
-                    id: row.get("id"),
-                    username: row.get("username"),
-                    password: row.get("password"),
-                    is_active: row.get("is_active"),
-                    premium_until: row.get("premium_until"),
-                };
-                Ok(Some(u))
-            },
-            Err(err) => {
-                match err {
-                    RowNotFound => Ok(None),
-                    _ => Err(Box::try_from(err).unwrap())
-                }
-            }
         }
     }
 }
@@ -122,7 +85,7 @@ pub struct PgPremiumRepository {
 
 #[async_trait]
 impl repository::PremiumRepository for PgPremiumRepository {
-    async fn prepare_premium_until(&self, tx_id: Tx2pcID, user_id: i64, until: chrono::DateTime<Utc>) -> Result<(), Box<dyn Error>> {
+    async fn prepare_premium_until(&self, tx_id: Tx2pcID, user_id: i64, until: chrono::DateTime<Utc>) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
 
         // TODO try lock
@@ -135,7 +98,7 @@ impl repository::PremiumRepository for PgPremiumRepository {
 
         if result.rows_affected() == 0 {
             _ = tx.rollback().await?;
-            return Err(Box::new(UserNotFoundError{}))
+            return Err(UserNotFoundError{}.into())
         }
 
         sqlx::query(
@@ -147,7 +110,7 @@ impl repository::PremiumRepository for PgPremiumRepository {
         Ok(())
     }
 
-    async fn commit_premium_until(&self, tx_id: Tx2pcID) -> Result<(), Box<dyn Error>> {
+    async fn commit_premium_until(&self, tx_id: Tx2pcID) -> anyhow::Result<()> {
         sqlx::query(
             &*format!("COMMIT PREPARED 'acc_{}';", tx_id),
         )
@@ -157,13 +120,13 @@ impl repository::PremiumRepository for PgPremiumRepository {
         Ok(())
     }
 
-    async fn rollback_premium_until(&self, tx_id: Tx2pcID) -> Result<(), Box<dyn Error>> {
-        sqlx::query(
-            &*format!("ROLLBACK PREPARED 'acc_{}';", tx_id),
-        )
-            .execute(&self.pool)
-            .await?;
-
-        Ok(())
-    }
+    // async fn rollback_premium_until(&self, tx_id: Tx2pcID) -> anyhow::Result<()> {
+    //     sqlx::query(
+    //         &*format!("ROLLBACK PREPARED 'acc_{}';", tx_id),
+    //     )
+    //         .execute(&self.pool)
+    //         .await?;
+    //
+    //     Ok(())
+    // }
 }
