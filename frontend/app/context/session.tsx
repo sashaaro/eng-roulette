@@ -10,32 +10,44 @@ export interface User {
 interface AuthContextType {
     user: User | null
     setUser: (user: User|null) => void
+    loading: boolean
 }
 
 export const SessionContext = createContext<AuthContextType|undefined>(undefined)
 
 export function AuthProvider({children}: { children: ReactNode }) {
-    const [user, setUser] = useState<User | null>(null)
+    const [user, setUser] = useState<User | null>()
+    const [loading, setLoading] = useState<boolean>(false)
 
     useEffect(() => {
         const token = localStorage.getItem("session")
         if (token) {
-            // TODO loading
+            setLoading(true)
             accountService.me(token).then(user => {
                 setUser({
                     username: user.username,
                     id: user.id,
                     token: token,
                 })
+                setLoading(false)
+            }).catch(err => {
+                setUser(null)
+                setLoading(false)
             })
+        } else {
+            setUser(null)
         }
         //checkAuth()
     }, [])
     useEffect(() => {
-        localStorage.setItem("session", user?.token || "")
+        if (user) {
+            localStorage.setItem('session', user.token);
+        } else if (user === null) {
+            localStorage.removeItem('session');
+        }
     }, [user]);
 
-    const ctx: AuthContextType = {user: user, setUser}
+    const ctx: AuthContextType = {user: user, setUser, loading: loading}
 
     return (
         <SessionContext.Provider value={ctx}>{children}

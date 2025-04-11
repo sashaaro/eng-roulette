@@ -13,11 +13,18 @@ use crate::infra::auth::AuthManager;
 use sqlx::{Pool, Postgres};
 use actix_web::web::{ServiceConfig};
 use actix_cors::Cors;
+use env_logger::Builder;
+use log::{LevelFilter};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    std::env::set_var("RUST_LOG", "debug");
-    env_logger::init();
+    Builder::new()
+        .filter(None, LevelFilter::Info)
+        .filter(Some("sqlx::query"), LevelFilter::Warn)
+        .filter(Some("actix_server::worker"), LevelFilter::Warn)
+        .filter(Some("actix_server::builder"), LevelFilter::Warn)
+        .filter(Some("audit"), LevelFilter::Warn)
+        .init();
 
     let pool = infra::db::pg().await;
 
@@ -27,8 +34,6 @@ async fn main() -> std::io::Result<()> {
             .to_string().parse::<u16>()
             .expect("invalid port"))
         .unwrap_or(8081);
-
-    println!("Start server on port {}", port);
 
     HttpServer::new(move || {
         let cors = Cors::default()

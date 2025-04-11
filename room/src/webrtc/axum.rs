@@ -21,7 +21,7 @@ use axum::middleware::from_extractor;
 use http::StatusCode;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::errors::ErrorKind;
-use log::error;
+use log::{error, info, warn};
 use thiserror::Error;
 use crate::webrtc::extract::{Claims, JWT};
 
@@ -149,8 +149,11 @@ async fn ws(
 
     let sessions = app_state.sessions.clone();
 
-    let resp =ws.on_failed_upgrade(move |error| {
-        println!("on_failed_upgrade {:?}", error);
+    let session_id = claims.sub.to_string();
+
+    let resp = ws.on_failed_upgrade(move |e| {
+        warn!(err:? = e; "Websocket upgrade failed");
+
         block_on(sessions.lock()).remove(&claims.sub.to_string());
     })
         .on_upgrade(async move |socket| {
@@ -160,11 +163,13 @@ async fn ws(
                 Mutex::new(receiver)
             ));
 
+            info!(session_id:? = session_id; "Websocket client connected");
+
             app_state
                 .sessions
                 .lock()
                 .await
-                .insert(claims.sub.to_string(), Arc::clone(&socket_client));
+                .insert(session_id, Arc::clone(&socket_client));
         });
 
     Ok(resp)

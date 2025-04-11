@@ -15,6 +15,12 @@ function callbackToPromise(): any {
     return {promise, callback}
 }
 
+export interface WebrtcSession {
+    pc: RTCPeerConnection
+    localStream: MediaStream;
+    emitter: EventEmitter;
+}
+
 export class RoomService {
     private axiosClient: AxiosInstance;
 
@@ -27,8 +33,6 @@ export class RoomService {
         if (!baseURL) {
             baseURL = createBaseURL("8081")
         }
-        baseURL = "https://roullette.botenza.org/api/room";
-
 
         this.axiosClient = axios.create({
             baseURL: baseURL,
@@ -38,7 +42,9 @@ export class RoomService {
 
     private async createWS(token: string): Promise<WebSocket> {
         if (!this.ws) {
-            this.ws = await createWS(token);
+            let baseURL = "wss://roullette.botenza.org/api/room";  // TODO parameterize baseURL
+
+            this.ws = await createWS(token, baseURL);
             const {callback, promise } = callbackToPromise()
             this.ws.addEventListener("open", callback);
             await promise;
@@ -52,7 +58,7 @@ export class RoomService {
     }
 
 
-    async createSession(room: string, user: User) {
+    async createSession(room: string, user: User): Promise<WebrtcSession> {
         await this.createWS(user.token);
         const pendingCandidates: RTCIceCandidateInit[] = [];
 
@@ -141,6 +147,12 @@ export class RoomService {
                 await this.renegotiation(false, room, user);
             }
 
+            window.addEventListener("beforeunload", () => {
+                console.log("closing ps & ws")
+                this.pc?.close();
+                this.ws?.close()
+            })
+
             const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: false})
             stream.getTracks().forEach(track => this.pc!.addTrack(track, stream));
 
@@ -199,4 +211,6 @@ export class RoomService {
     }
 }
 
-export const roomService = new RoomService();
+export const roomService = new RoomService(
+    "https://roullette.botenza.org/api/room" // TODO parameterize baseURL
+);

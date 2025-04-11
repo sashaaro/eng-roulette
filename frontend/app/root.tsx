@@ -12,7 +12,6 @@ import "./app.scss";
 import {AuthProvider} from "~/context/session";
 
 export function Layout({ children }: { children: React.ReactNode }) {
-
   return (
     <html lang="en">
     <head>
@@ -20,7 +19,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <meta name="viewport" content="width=device-width, initial-scale=1"/>
       <Meta/>
       <Links/>
-      {import.meta.env.DEV ? <script src="http://localhost:8097"></script> : null}
+      <title>Eng roulette</title>
+      {/*{'React Developer Tools '}*/}
+      {/*{import.meta.env.DEV ? <script src="http://localhost:8097"></script> : null}*/}
     </head>
     <body>
     <AuthProvider>
@@ -32,6 +33,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     </body>
     </html>
   );
+}
+
+export function HydrateFallback() {
+  return (<div>Loading...</div>);
 }
 
 export default function App() {

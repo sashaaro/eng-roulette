@@ -63,6 +63,8 @@ async fn login(
     let user = app.login(b.name.clone(), b.password.clone()).await;
 
     if user.is_err() {
+        log::info!(username:? = b.name; "Failed login attempt");
+
         return HttpResponse::NotFound().body(format!("err: {:?}", user.err()));
     }
     let user = user.unwrap();
@@ -71,6 +73,8 @@ async fn login(
         sub: user.id,
         exp: chrono::Utc::now().timestamp() + JWT_TTL,
     });
+
+    log::info!(user:? = user.username; "User authenticated");
 
     HttpResponse::Ok().json(&RegisterResp{
         token

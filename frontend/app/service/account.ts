@@ -28,8 +28,6 @@ export class AccountService {
             baseURL = createBaseURL("8080")
         }
 
-        baseURL = "https://roullette.botenza.org/api/account";
-
         this.axiosClient = axios.create({
             baseURL: baseURL,
             headers: {'Content-Type': 'application/json'},
@@ -56,4 +54,6 @@ export class AccountService {
     }
 }
 
-export const accountService = new AccountService();
+export const accountService = new AccountService(
+    "https://roullette.botenza.org/api/account" // TODO parameterize baseURL
+);

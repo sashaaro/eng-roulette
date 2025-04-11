@@ -109,7 +109,7 @@ impl SFU {
                     match this.signalling.send_ice_candidate(session_id.clone(), c).await {
                         Ok(_) => {},
                         Err(e) => {
-                            println!("Error sending ice candidate: {:?}", e);
+                            warn!(err:? = e, user:? = session_id.clone(); "Could not send ice candidate");
                         }
                     }
                 })

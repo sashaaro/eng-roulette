@@ -10,10 +10,6 @@ export interface VideoSrcProps {
     mirrored?: boolean
 }
 
-const videoStyle = {
-    width: '100%',
-}
-
 export default class VideoSrc extends PureComponent<VideoSrcProps> {
     videoRef = createRef<HTMLVideoElement>()
 
@@ -55,7 +51,6 @@ export default class VideoSrc extends PureComponent<VideoSrcProps> {
                 autoPlay={this.props.autoPlay}
                 playsInline={true}
                 ref={this.videoRef}
-                style={videoStyle}
             />
         )
     }
