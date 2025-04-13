@@ -1,6 +1,6 @@
 entryPoints:
-  # web:
-  # address: ":80"
+  web:
+    address: ":80"
   websecure:
     address: ":443"
     http:
@@ -10,12 +10,25 @@ entryPoints:
           - main: botenza.org
             sans:
               - traefik.botenza.org
-              - roullette.botenza.org
+              - roulette.botenza.org
+
+log:
+  level: DEBUG
+  filePath: "/tmp/traefik.log"
 
 providers:
   docker: {}
   file:
-    filename: ./traefik.yml
+    filename: /etc/traefik/http.yml
 
 api:
   insecure: false
+
+
+certificatesResolvers:
+  leresolver:
+    acme:
+      email: sashaaro@gmail.com
+      storage: /acme/acme.json
+      httpChallenge:
+        entryPoint: web

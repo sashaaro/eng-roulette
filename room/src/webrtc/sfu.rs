@@ -334,13 +334,9 @@ impl SFU {
         dist.pc.add_track(dist_track2).await.unwrap();
 
         let dist2 = Arc::clone(&dist);
-        match self.on_negotiation_needed(Arc::clone(&dist)).await {
-            Ok(_) => {
-            },
-            Err(e) => {
-                error!(user:? = dist2.session_id.clone(), err:? = e; "Failed await negotiation_needed");
-                return;
-            }
+        if let Err(e) = self.on_negotiation_needed(Arc::clone(&dist)).await {
+            error!(user:? = dist2.session_id.clone(), err:? = e; "Failed await negotiation_needed");
+            return;
         }
 
         // print!("send rtp to {} -> {}", &session_id3, &other_session);
@@ -424,6 +420,9 @@ pub async fn create_peer(session_id: String) -> webrtc::error::Result<RTCPeerCon
                 "stun:stun1.l.google.com:3478".to_owned(),
                 "stun:stun1.l.google.com:5349".to_owned(),
                 "stun:stun2.l.google.com:19302".to_owned(),
+                "stun:stun.sipnet.net:3478".to_owned(),
+                "stun:stun.sipnet.ru:3478".to_owned(),
+                "stun:stun.stunprotocol.org:3478".to_owned(),
             ],
             ..Default::default()
         }],

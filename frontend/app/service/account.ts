@@ -55,5 +55,5 @@ export class AccountService {
 }
 
 export const accountService = new AccountService(
-    "https://roullette.botenza.org/api/account" // TODO parameterize baseURL
+    "https://roulette.botenza.org/api/account" // TODO parameterize baseURL
 );

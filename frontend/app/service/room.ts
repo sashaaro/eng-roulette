@@ -42,9 +42,9 @@ export class RoomService {
 
     private async createWS(token: string): Promise<WebSocket> {
         if (!this.ws) {
-            let baseURL = "wss://roullette.botenza.org/api/room";  // TODO parameterize baseURL
+            let baseURL = "wss://roulette.botenza.org/api/room";  // TODO parameterize baseURL
 
-            this.ws = await createWS(token, baseURL);
+            this.ws = await createWS(baseURL, token);
             const {callback, promise } = callbackToPromise()
             this.ws.addEventListener("open", callback);
             await promise;
@@ -212,5 +212,5 @@ export class RoomService {
 }
 
 export const roomService = new RoomService(
-    "https://roullette.botenza.org/api/room" // TODO parameterize baseURL
+    "https://roulette.botenza.org/api/room" // TODO parameterize baseURL
 );
