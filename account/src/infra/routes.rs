@@ -32,7 +32,7 @@ async fn register(
     match app.create_user(b.name, b.password).await {
         Ok(user) => {
             let token = auth_manager.auth_header(Claims {
-                sub: user.id,
+                sub: user.id as i64,
                 exp: chrono::Utc::now().timestamp() + JWT_TTL,
             });
 
@@ -70,7 +70,7 @@ async fn login(
     let user = user.unwrap();
 
     let token = auth_manager.auth_header(Claims {
-        sub: user.id,
+        sub: user.id as i64,
         exp: chrono::Utc::now().timestamp() + JWT_TTL,
     });
 

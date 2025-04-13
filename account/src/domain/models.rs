@@ -5,7 +5,7 @@ use sqlx::Row;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct User {
-    pub id: i64,
+    pub id: i32,
     pub username: String,
     #[serde(skip_serializing)]
     pub password: String,

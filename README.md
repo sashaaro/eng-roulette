@@ -20,7 +20,7 @@
 ```
 .
 ├── account/        # Сервис авторизации и управления пользователями
-├── billing/        # Биллинг
+├── billing/        # Сервис биллинг (in progress)
 ├── room/           # Webrtc sfu сервис, управления комнатами
 ├── frontend/       # React SPA
 ├── scripts/        # Вспомогательные скрипты
@@ -35,9 +35,9 @@
 
 ```bash
 docker-compose up postgres
-cargo run --bin account
-cargo run --bin room
-npm run dev
+cargo run --bin account # запускаем сервис account
+cargo run --bin room # запускаем сервис room
+npm run dev # запускаем сервис react spa
 ```
 Frontend будет доступен на http://localhost:3000
 
@@ -58,9 +58,9 @@ docker compose -f compose.yaml up -d
 Это поднимет сервисы traefik, proxy и tunnel, необходимые для туннеля и HTTPS.
 
 2. Локально:
-    - Запустите scripts/tunnel.sh
+    - Запустите ./tunnel.sh
 ```bash
-./scripts/tunnel.sh
+./tunnel.sh
 ```
 
 Этот скрипт установит безопасный туннель между локальным окружением и сервером.
