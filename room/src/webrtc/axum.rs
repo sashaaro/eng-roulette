@@ -93,7 +93,7 @@ impl Signalling for WebsocketSignalling {
     }
 }
 
-pub async fn create_sfu_router() -> Router {
+pub async fn create_webrtc_router() -> Router {
     let sessions = Arc::new(Mutex::new(HashMap::new()));
 
     let signalling = Box::new(WebsocketSignalling::new(
@@ -106,7 +106,6 @@ pub async fn create_sfu_router() -> Router {
 
     let app = Router::new()
         .layer(from_extractor::<JWT>())
-        .route("/version", any(async || "v0.1.0"))
         .route("/ws", any(ws))
         .route("/offer", post(accept_offer))
         .route("/answer", post(accept_answer))

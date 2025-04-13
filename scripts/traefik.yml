@@ -6,7 +6,7 @@ entryPoints:
     http:
       tls:
         certResolver: leresolver
-        domains:
+        domains:  # change it!
           - main: botenza.org
             sans:
               - traefik.botenza.org
@@ -14,7 +14,6 @@ entryPoints:
 
 log:
   level: DEBUG
-  filePath: "/tmp/traefik.log"
 
 providers:
   docker: {}
@@ -28,7 +27,7 @@ api:
 certificatesResolvers:
   leresolver:
     acme:
-      email: sashaaro@gmail.com
+      email: sashaaro@gmail.com # change it!
       storage: /acme/acme.json
       httpChallenge:
         entryPoint: web

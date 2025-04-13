@@ -32,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
-    let app = webrtc::axum::create_sfu_router().await;
+    let app = webrtc::axum::create_webrtc_router().await;
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await?;
     Ok(axum::serve(listener, app).await?)
 }
@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::webrtc::axum::create_sfu_router;
+    use crate::webrtc::axum::create_webrtc_router;
     use axum::{
         body::Body,
         http::{Request, StatusCode},
@@ -49,7 +49,7 @@ mod tests {
 
     #[tokio::test]
     async fn hello_world() {
-        let app = create_sfu_router().await;
+        let app = create_webrtc_router().await;
 
         // `Router` implements `tower::Service<Request<Body>>` so we can
         // call it like any tower service, no need to run an HTTP server.

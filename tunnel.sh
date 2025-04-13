@@ -1,1 +1,0 @@
-docker run --rm --name=tunnel --network=host jpillora/chisel:latest -- client botenza.org:8080 R:8057:5157 R:8081:8081 R:8082:8082

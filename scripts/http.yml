@@ -2,21 +2,21 @@ http:
   routers:
     rl-rm:
       service: rl-rm
-      rule: "Host(`roulette.botenza.org`) && PathPrefix(`/api/room`)"
+      rule: "Host(`${SERVER:-roulette.botenza.org}`) && PathPrefix(`/api/room`)"
       middlewares:
         - rl-rm-strip
       tls: true
 
     rl-acc:
       service: rl-acc
-      rule: "Host(`roulette.botenza.org`) && PathPrefix(`/api/account`)"
+      rule: "Host(`${SERVER:-roulette.botenza.org}`) && PathPrefix(`/api/account`)"
       middlewares:
         - rl-acc-strip
       tls: true
 
     rl-front:
       service: rl-front
-      rule: "Host(`roulette.botenza.org`)"
+      rule: "Host(`${SERVER:-roulette.botenza.org}`)"
       tls: true
 
   services:

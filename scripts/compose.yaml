@@ -21,9 +21,11 @@ services:
       - "./traefik.yml:/etc/traefik/traefik.yml"
       - "./http.yml:/etc/traefik/http.yml"
       - "./acme:/acme"
+    environment:
+      - SERVER=${SERVER:-roulette.botenza.org}
     labels:
       - traefik.enable=true
-      - traefik.http.routers.api.rule=Host(`traefik.botenza.org`)
+      - traefik.http.routers.api.rule=Host(`${DASHBOARD_SERVER:-traefik.botenza.org}`)
       - traefik.http.routers.api.service=api@internal
       - traefik.http.services.api.loadbalancer.server.port=8080
       - traefik.http.routers.api.tls=true
