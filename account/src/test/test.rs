@@ -25,7 +25,7 @@ mod tests {
 
         let app = test::init_service(App::new().configure(config_app(pool.clone()))).await;
 
-        pool.execute("truncate \"user\" cascade").await.unwrap();
+        pool.execute("truncate users cascade").await.unwrap();
 
         let req = test::TestRequest::post()
             .insert_header(ContentType::json())

@@ -35,7 +35,7 @@ impl Error for UserNotFoundError {}
 impl repository::UserRepository for PgUserRepository {
     async fn create_user(&self, username: String, password: String) -> anyhow::Result<User> {
         let result = sqlx::query(&*format!(
-            "INSERT INTO \"user\"(username, password) VALUES ($1, $2) RETURNING id;"
+            "INSERT INTO users(username, password) VALUES ($1, $2) RETURNING id;"
         ))
         .bind(&username)
         .bind(&password)
@@ -52,7 +52,7 @@ impl repository::UserRepository for PgUserRepository {
     }
 
     async fn find_by_username(&self, username: &str) -> anyhow::Result<Option<User>> {
-        let row = sqlx::query("SELECT * FROM \"user\" WHERE username = $1")
+        let row = sqlx::query("SELECT * FROM users WHERE username = $1")
             .bind(username)
             .fetch_one(&self.pool)
             .await;
@@ -64,7 +64,7 @@ impl repository::UserRepository for PgUserRepository {
     }
 
     async fn find(&self, id: i64) -> anyhow::Result<Option<User>> {
-        let row = sqlx::query("SELECT * FROM \"user\" WHERE id = $1")
+        let row = sqlx::query("SELECT * FROM users WHERE id = $1")
             .bind(id)
             .fetch_one(&self.pool)
             .await;
@@ -95,7 +95,7 @@ impl repository::PremiumRepository for PgPremiumRepository {
         // TODO try lock
 
         let result = sqlx::query!(
-            "UPDATE \"user\" SET premium_until = $1 WHERE id = $2",
+            "UPDATE users SET premium_until = $1 WHERE id = $2",
             until.naive_local(),
             i32::try_from(user_id).expect("")
         )

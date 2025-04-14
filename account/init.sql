@@ -1,4 +1,4 @@
-create table "user"
+create table "users"
 (
     id            serial constraint user_pk primary key,
     username      varchar(255) unique,
