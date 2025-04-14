@@ -2,11 +2,12 @@ use crate::webrtc::extract::{Claims, JWT};
 use crate::webrtc::sfu::{Signalling, SFU};
 use anyhow::Result;
 use axum::extract::ws::{Message, WebSocket};
-use axum::extract::{Query, State, WebSocketUpgrade};
-use axum::middleware::from_extractor;
+use axum::extract::{FromRef, Query, State, WebSocketUpgrade};
+use axum::handler::Handler;
+use axum::middleware::{from_extractor, from_extractor_with_state};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, post};
-use axum::{Json, Router};
+use axum::{Json, Router, ServiceExt};
 use futures::executor::block_on;
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
@@ -16,6 +17,7 @@ use jsonwebtoken::DecodingKey;
 use log::{error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::env;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -34,6 +36,15 @@ pub(crate) type SocketClient = (
 pub struct AppState {
     pub(crate) sessions: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>,
     pub(crate) sfu: SFU,
+    pub secret_key: SecretKey,
+}
+
+pub type SecretKey = &'static DecodingKey;
+
+impl FromRef<AppState> for SecretKey {
+    fn from_ref(app_state: &AppState) -> SecretKey {
+        app_state.secret_key
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -116,18 +127,31 @@ pub async fn create_webrtc_router() -> Router {
     let sessions = Arc::new(Mutex::new(HashMap::new()));
 
     let signalling = Box::new(WebsocketSignalling::new(Arc::clone(&sessions)));
+
+    let secret_key = {
+        let key = env::var_os("SECRET_KEY")
+            .expect("Missing SECRET_KEY env variable")
+            .to_str()
+            .expect("SECRET_KEY contains invalid Unicode")
+            .to_string();
+
+        let key = DecodingKey::from_secret(key.as_ref());
+        Box::leak(Box::new(key))
+    } as SecretKey; // allow SECRET_KEY life endless
+
     let state = AppState {
         sfu: SFU::new(signalling),
         sessions: Arc::clone(&sessions),
+        secret_key,
     };
 
     let app = Router::new()
-        .layer(from_extractor::<JWT>())
         .route("/ws", any(ws))
         .route("/offer", post(accept_offer))
         .route("/answer", post(accept_answer))
         .route("/candidate", post(candidate))
-        .layer(CorsLayer::permissive())
+        .layer(CorsLayer::permissive()) // TODO
+        .layer(from_extractor_with_state::<JWT, AppState>(state.clone()))
         .with_state(state);
 
     app
@@ -140,20 +164,9 @@ struct WsRequest {
 
 async fn ws(
     ws: WebSocketUpgrade,
-    Query(req): Query<WsRequest>,
+    JWT(claims): JWT,
     State(app_state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-    let secret = "secret".to_string();
-
-    // TODO inject from config
-    let decoding_key = &DecodingKey::from_secret(secret.as_ref());
-
-    let jwt = req.jwt.trim_start_matches("Bearer").trim();
-
-    let claims =
-        jsonwebtoken::decode::<Claims>(jwt, decoding_key, &jsonwebtoken::Validation::default())
-            .map(|t| t.claims)?;
-
     let sessions = app_state.sessions.clone();
 
     let session_id = claims.sub.to_string();

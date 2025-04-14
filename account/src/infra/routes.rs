@@ -80,7 +80,7 @@ async fn me(
     auth_manager: web::Data<AuthManager>,
     app: web::Data<Application>,
 ) -> impl Responder {
-    let token = auth_manager.fetch_claims_from_req(&req);
+    let token = auth_manager.extract_claims_from_req(&req);
 
     if token.is_err() {
         return HttpResponse::BadRequest().body(format!("err: {:?}", token.err()));

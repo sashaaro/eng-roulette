@@ -1,9 +1,11 @@
-use axum::extract::{FromRequest, FromRequestParts, Request};
+use crate::webrtc::axum::SecretKey;
+use axum::extract::{FromRef, FromRequest, FromRequestParts, Query, Request};
 use axum::response::{IntoResponse, Response};
 use http::request::Parts;
 use http::{HeaderMap, StatusCode};
-use jsonwebtoken::DecodingKey;
-use serde::{Deserialize, Serialize};
+use jsonwebtoken::Validation;
+use serde::{Deserialize, Serialize, Serializer};
+use std::collections::HashMap;
 use std::future::Future;
 
 #[derive(Debug)]
@@ -41,45 +43,56 @@ pub struct Claims {
     pub(crate) exp: i64,
 }
 
-impl<S> FromRequestParts<S> for JWT {
+impl<S> FromRequestParts<S> for JWT
+where
+    SecretKey: FromRef<S>,
+    S: Send + Sync,
+{
     type Rejection = JWTRejection;
 
     fn from_request_parts(
         parts: &mut Parts,
-        _: &S,
+        state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async { fetch_jwt(&parts.headers) }
+        let query_jwt = parts.uri.query().and_then(|query| {
+            serde_urlencoded::from_str::<HashMap<String, String>>(query)
+                .ok()
+                .and_then(|params| params.get("jwt").map(|s| s.to_owned()))
+        });
+
+        async { extract_token(&parts.headers, query_jwt, SecretKey::from_ref(state)) }
     }
 }
 
-fn fetch_jwt(headers: &HeaderMap) -> Result<JWT, JWTRejection> {
-    let secret = "secret".to_string();
+fn extract_token(
+    headers: &HeaderMap,
+    query_jwt: Option<String>,
+    secret_key: SecretKey,
+) -> Result<JWT, JWTRejection> {
+    let token: Result<String, JWTRejection> = match query_jwt {
+        Some(token) => Ok(token),
+        None => {
+            let header = headers
+                .get("Authorization")
+                .ok_or(JWTRejection::InvalidSignature)?
+                .to_str()
+                .map(|s| s.to_string())
+                .map_err(|_| JWTRejection::InvalidAuthorizationHeader)?
+                .clone();
 
-    //let secret = std::env::var("SECRET_KEY").unwrap().as_ref();
-    // TODO inject from config
-    let decoding_key = &DecodingKey::from_secret(secret.as_ref());
+            let token = header.trim_start_matches("Bearer").trim();
+            Ok(token.to_owned())
+        }
+    };
 
-    let header = headers
-        .get("Authorization")
-        .ok_or(JWTRejection::InvalidSignature)?
-        .to_str()
-        .map(|s| s.to_string())
-        .map_err(|_| JWTRejection::InvalidAuthorizationHeader)?
-        .clone();
+    if token.is_err() {
+        return Err(token.err().unwrap());
+    }
+    let token = token?;
 
-    let header = header.trim_start_matches("Bearer").trim();
+    let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
 
-    jsonwebtoken::decode::<Claims>(header, decoding_key, &jsonwebtoken::Validation::default())
+    jsonwebtoken::decode::<Claims>(&token, secret_key, &validation)
         .map(|t| t.claims.into())
         .map_err(|_| JWTRejection::InvalidSignature)
-}
-
-impl<S> FromRequest<S> for JWT
-where
-    S: Send + Sync,
-{
-    type Rejection = JWTRejection;
-    async fn from_request(req: Request, _: &S) -> Result<Self, Self::Rejection> {
-        fetch_jwt(req.headers())
-    }
 }

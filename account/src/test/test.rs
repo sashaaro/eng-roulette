@@ -8,11 +8,14 @@ mod tests {
     use actix_web::{test, App};
     use sqlx::Executor;
 
+    const SECRET_KEY: &str = "53b65289550252052c61406f0f3dad24";
+
     #[actix_web::test]
     async fn test_index_get() {
         let pool = db::pg().await;
 
-        let app = test::init_service(App::new().configure(config_app(pool.clone()))).await;
+        let app =
+            test::init_service(App::new().configure(config_app(pool.clone(), SECRET_KEY))).await;
 
         let req = test::TestRequest::post().uri("/").to_request();
         let resp = test::call_service(&app, req).await;
@@ -23,7 +26,8 @@ mod tests {
     async fn test_register_and_login() {
         let pool = db::pg().await;
 
-        let app = test::init_service(App::new().configure(config_app(pool.clone()))).await;
+        let app =
+            test::init_service(App::new().configure(config_app(pool.clone(), SECRET_KEY))).await;
 
         pool.execute("truncate users cascade").await.unwrap();
 

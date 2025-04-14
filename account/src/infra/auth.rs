@@ -1,5 +1,5 @@
 use actix_web::HttpRequest;
-use jsonwebtoken::{DecodingKey, EncodingKey};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -9,30 +9,35 @@ pub struct Claims {
 }
 
 pub struct AuthManager {
+    secret_key: String,
     decoding_key: DecodingKey,
-    encoding_key: EncodingKey,
 }
 
 impl AuthManager {
     pub fn new(secret_key: String) -> AuthManager {
+        let decoding_key = DecodingKey::from_secret(secret_key.as_ref());
+
         AuthManager {
-            decoding_key: DecodingKey::from_secret(secret_key.as_ref()),
-            encoding_key: EncodingKey::from_secret(secret_key.as_ref()),
+            secret_key,
+            decoding_key,
         }
     }
 
     pub fn auth_header(&self, claims: Claims) -> String {
-        let token = jsonwebtoken::encode(
-            &jsonwebtoken::Header::default(),
+        jsonwebtoken::encode(
+            &Header::new(jsonwebtoken::Algorithm::HS256),
             &claims,
-            &self.encoding_key,
-        );
-        return token.unwrap(); // TODO stop use unwrap
+            &EncodingKey::from_secret(self.secret_key.as_ref()),
+        )
+        .unwrap()
     }
-    pub fn fetch_claims_from_req(
+
+    pub fn extract_claims_from_req(
         &self,
         req: &HttpRequest,
     ) -> Result<Claims, Box<dyn std::error::Error>> {
+        let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
+
         let mut auth_header = req
             .headers()
             .get("Authorization")
@@ -40,11 +45,9 @@ impl AuthManager {
             .to_str()?
             .to_string();
         auth_header = auth_header.trim_start_matches("Bearer").trim().to_string();
-        let token = jsonwebtoken::decode::<Claims>(
-            auth_header.as_str(),
-            &self.decoding_key,
-            &jsonwebtoken::Validation::default(),
-        );
-        return token.map(|t| t.claims).map_err(|e| e.into());
+
+        jsonwebtoken::decode::<Claims>(auth_header.as_str(), &self.decoding_key, &validation)
+            .map(|t| t.claims)
+            .map_err(|e| e.into())
     }
 }

@@ -38,6 +38,16 @@ async fn main() -> std::io::Result<()> {
         })
         .unwrap_or(8081);
 
+    let secret_key = {
+        let key = env::var_os("SECRET_KEY")
+            .expect("Missing SECRET_KEY env variable")
+            .to_str()
+            .expect("SECRET_KEY contains invalid Unicode")
+            .to_string();
+
+        Box::leak(key.into_boxed_str())
+    } as &'static str; // allow SECRET_KEY life endless
+
     HttpServer::new(move || {
         let cors = Cors::default()
             .send_wildcard()
@@ -50,14 +60,16 @@ async fn main() -> std::io::Result<()> {
             ])
             .max_age(3600);
 
-        App::new().configure(config_app(pool.clone())).wrap(cors)
+        App::new()
+            .configure(config_app(pool.clone(), secret_key))
+            .wrap(cors)
     })
     .bind(("0.0.0.0", port))?
     .run()
     .await
 }
 
-fn config_app(pool: Pool<Postgres>) -> Box<dyn Fn(&mut ServiceConfig)> {
+fn config_app(pool: Pool<Postgres>, secret_key: &'static str) -> Box<dyn Fn(&mut ServiceConfig)> {
     let user_repo = Arc::new(PgUserRepository::new(pool.clone()));
 
     let premium_repo = web::Data::new(PgPremiumRepository {
@@ -72,7 +84,7 @@ fn config_app(pool: Pool<Postgres>) -> Box<dyn Fn(&mut ServiceConfig)> {
     });
 
     Box::new(move |cfg: &mut ServiceConfig| {
-        let auth_manager = web::Data::new(AuthManager::new("secret".to_string()));
+        let auth_manager = web::Data::new(AuthManager::new(secret_key.to_string()));
         let ua = Arc::clone(&user_repo);
         let pa = Arc::clone(&premium_repo);
         let ba = Arc::clone(&billing);
