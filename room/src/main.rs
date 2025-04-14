@@ -23,10 +23,7 @@ async fn main() -> anyhow::Result<()> {
         .filter(Some("webrtc::peer_connection"), LevelFilter::Warn)
         .filter(Some("webrtc_ice::mdns"), LevelFilter::Warn)
         .filter(Some("webrtc_mdns::conn"), LevelFilter::Warn)
-        .filter(
-            Some("webrtc_ice::agent::agent_internal"),
-            LevelFilter::Warn,
-        )
+        .filter(Some("webrtc_ice::agent::agent_internal"), LevelFilter::Warn)
         .filter(Some("webrtc_ice::agent::agent_gather"), LevelFilter::Warn)
         .filter(Some("webrtc_srtp::session"), LevelFilter::Warn)
         .init();

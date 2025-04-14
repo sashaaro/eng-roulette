@@ -1,31 +1,34 @@
+use crate::webrtc::extract::{Claims, JWT};
+use crate::webrtc::sfu::{Signalling, SFU};
+use anyhow::Result;
+use axum::extract::ws::{Message, WebSocket};
+use axum::extract::{Query, State, WebSocketUpgrade};
+use axum::middleware::from_extractor;
+use axum::response::{IntoResponse, Response};
+use axum::routing::{any, post};
+use axum::{Json, Router};
+use futures::executor::block_on;
+use futures::stream::{SplitSink, SplitStream};
+use futures::{SinkExt, StreamExt};
+use http::StatusCode;
+use jsonwebtoken::errors::ErrorKind;
+use jsonwebtoken::DecodingKey;
+use log::{error, info, warn};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc};
-use axum::extract::{Query, State, WebSocketUpgrade};
-use axum::response::{IntoResponse, Response};
-use axum::{Json, Router};
-use axum::extract::ws::{Message, WebSocket};
-use axum::routing::{any, post};
-use futures::executor::block_on;
-use futures::stream::{SplitSink, SplitStream};
-use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use thiserror::Error;
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
-use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use crate::webrtc::sfu::{Signalling, SFU};
-use futures::{SinkExt, StreamExt};
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
-use anyhow::{Result};
-use axum::middleware::from_extractor;
-use http::StatusCode;
-use jsonwebtoken::DecodingKey;
-use jsonwebtoken::errors::ErrorKind;
-use log::{error, info, warn};
-use thiserror::Error;
-use crate::webrtc::extract::{Claims, JWT};
+use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
-pub(crate) type SocketClient = (Mutex<SplitSink<WebSocket, Message>>, Mutex<SplitStream<WebSocket>>);
+pub(crate) type SocketClient = (
+    Mutex<SplitSink<WebSocket, Message>>,
+    Mutex<SplitStream<WebSocket>>,
+);
 
 #[derive(Clone)]
 pub struct AppState {
@@ -44,14 +47,12 @@ pub enum SignalingResponse {
 }
 
 struct WebsocketSignalling {
-    sessions: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>
+    sessions: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>,
 }
 
 impl WebsocketSignalling {
     fn new(sessions: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>) -> Self {
-        Self {
-            sessions,
-        }
+        Self { sessions }
     }
 }
 
@@ -62,7 +63,11 @@ pub enum SfuError {
 }
 
 impl Signalling for WebsocketSignalling {
-    fn send_sdp(&self, session_id: String, sdp: RTCSessionDescription) -> Pin<Box<dyn Future<Output=Result<()>> + Send + '_>> {
+    fn send_sdp(
+        &self,
+        session_id: String,
+        sdp: RTCSessionDescription,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async move {
             let sessions = self.sessions.lock().await;
             let session = sessions.get(&session_id);
@@ -71,13 +76,22 @@ impl Signalling for WebsocketSignalling {
             } else {
                 let session = session.unwrap();
                 let playground = serde_json::to_string(&SignalingResponse::Sdp(sdp))?;
-                session.0.lock().await.send(Message::from(playground)).await?;
+                session
+                    .0
+                    .lock()
+                    .await
+                    .send(Message::from(playground))
+                    .await?;
                 Ok(())
             }
         })
     }
 
-    fn send_ice_candidate(&self, session_id: String, candidate: Option<RTCIceCandidate>) -> Pin<Box<dyn Future<Output=Result<()>> + Send + '_>> {
+    fn send_ice_candidate(
+        &self,
+        session_id: String,
+        candidate: Option<RTCIceCandidate>,
+    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>> {
         Box::pin(async move {
             let sessions = self.sessions.lock().await;
             let session = sessions.get(&session_id);
@@ -86,7 +100,12 @@ impl Signalling for WebsocketSignalling {
             } else {
                 let session = session.unwrap();
                 let playground = serde_json::to_string(&SignalingResponse::Candidate(candidate))?;
-                session.0.lock().await.send(Message::from(playground)).await?;
+                session
+                    .0
+                    .lock()
+                    .await
+                    .send(Message::from(playground))
+                    .await?;
                 Ok(())
             }
         })
@@ -96,9 +115,7 @@ impl Signalling for WebsocketSignalling {
 pub async fn create_webrtc_router() -> Router {
     let sessions = Arc::new(Mutex::new(HashMap::new()));
 
-    let signalling = Box::new(WebsocketSignalling::new(
-        Arc::clone(&sessions),
-    ));
+    let signalling = Box::new(WebsocketSignalling::new(Arc::clone(&sessions)));
     let state = AppState {
         sfu: SFU::new(signalling),
         sessions: Arc::clone(&sessions),
@@ -126,40 +143,31 @@ async fn ws(
     Query(req): Query<WsRequest>,
     State(app_state): State<AppState>,
 ) -> Result<impl IntoResponse, AppError> {
-
     let secret = "secret".to_string();
 
     // TODO inject from config
     let decoding_key = &DecodingKey::from_secret(secret.as_ref());
 
-
     let jwt = req.jwt.trim_start_matches("Bearer").trim();
 
-    let claims = jsonwebtoken::decode::<Claims>(
-        jwt,
-        decoding_key,
-        &jsonwebtoken::Validation::default(),
-    )
-        .map(|t| {
-            t.claims
-        })?;
-
+    let claims =
+        jsonwebtoken::decode::<Claims>(jwt, decoding_key, &jsonwebtoken::Validation::default())
+            .map(|t| t.claims)?;
 
     let sessions = app_state.sessions.clone();
 
     let session_id = claims.sub.to_string();
 
-    let resp = ws.on_failed_upgrade(move |e| {
-        warn!(err:? = e; "Websocket upgrade failed");
+    let resp = ws
+        .on_failed_upgrade(move |e| {
+            warn!(err:? = e; "Websocket upgrade failed");
 
-        block_on(sessions.lock()).remove(&claims.sub.to_string());
-    })
+            block_on(sessions.lock()).remove(&claims.sub.to_string());
+        })
         .on_upgrade(async move |socket| {
             let (sender, receiver) = socket.split();
-            let socket_client: Arc<SocketClient> = Arc::new((
-                Mutex::new(sender),
-                Mutex::new(receiver)
-            ));
+            let socket_client: Arc<SocketClient> =
+                Arc::new((Mutex::new(sender), Mutex::new(receiver)));
 
             info!(session_id:? = session_id; "Websocket client connected");
 
@@ -179,7 +187,6 @@ struct AcceptOfferReq {
     room_id: String,
 }
 
-
 #[derive(Deserialize, Serialize)]
 struct AnswerResponse {
     answer: RTCSessionDescription,
@@ -190,11 +197,12 @@ async fn accept_offer(
     State(app_state): State<AppState>,
     Json(req): Json<AcceptOfferReq>,
 ) -> Result<impl IntoResponse, AppError> {
-    let answer = app_state.sfu.accept_offer(claims.sub.to_string(), req.offer, req.room_id).await?;
+    let answer = app_state
+        .sfu
+        .accept_offer(claims.sub.to_string(), req.offer, req.room_id)
+        .await?;
 
-    Ok(Json(AnswerResponse {
-        answer,
-    }))
+    Ok(Json(AnswerResponse { answer }))
 }
 
 struct AppError(anyhow::Error);
@@ -206,13 +214,9 @@ impl IntoResponse for AppError {
         if let Some(jwt_err) = self.0.downcast_ref::<jsonwebtoken::errors::Error>() {
             match jwt_err.kind() {
                 ErrorKind::ExpiredSignature => {
-                    return (
-                        StatusCode::UNAUTHORIZED,
-                        format!("token expired"),
-                    )
-                        .into_response();
-                },
-                _ => {},
+                    return (StatusCode::UNAUTHORIZED, format!("token expired")).into_response();
+                }
+                _ => {}
             }
         };
 
@@ -242,9 +246,12 @@ struct AcceptAnswerReq {
 async fn accept_answer(
     JWT(claims): JWT,
     State(app_state): State<AppState>,
-    Json(req): Json<AcceptAnswerReq>
+    Json(req): Json<AcceptAnswerReq>,
 ) -> Result<impl IntoResponse, AppError> {
-    app_state.sfu.accept_answer(claims.sub.to_string().clone(), req.answer, req.room_id).await?;
+    app_state
+        .sfu
+        .accept_answer(claims.sub.to_string().clone(), req.answer, req.room_id)
+        .await?;
 
     Ok("ok")
 }
@@ -260,7 +267,10 @@ async fn candidate(
     State(app_state): State<AppState>,
     Json(req): Json<CandidateRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    app_state.sfu.accept_candidate(claims.sub.to_string(), req.room_id, req.candidate).await?;
+    app_state
+        .sfu
+        .accept_candidate(claims.sub.to_string(), req.room_id, req.candidate)
+        .await?;
 
     Ok("ok")
 }

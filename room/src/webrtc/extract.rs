@@ -1,10 +1,10 @@
-use std::future::Future;
 use axum::extract::{FromRequest, FromRequestParts, Request};
 use axum::response::{IntoResponse, Response};
-use http::{HeaderMap, StatusCode};
 use http::request::Parts;
-use jsonwebtoken::{DecodingKey};
+use http::{HeaderMap, StatusCode};
+use jsonwebtoken::DecodingKey;
 use serde::{Deserialize, Serialize};
+use std::future::Future;
 
 #[derive(Debug)]
 pub struct JWT(pub Claims);
@@ -48,12 +48,9 @@ impl<S> FromRequestParts<S> for JWT {
         parts: &mut Parts,
         _: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
-        async {
-            fetch_jwt(&parts.headers)
-        }
+        async { fetch_jwt(&parts.headers) }
     }
 }
-
 
 fn fetch_jwt(headers: &HeaderMap) -> Result<JWT, JWTRejection> {
     let secret = "secret".to_string();
@@ -61,7 +58,6 @@ fn fetch_jwt(headers: &HeaderMap) -> Result<JWT, JWTRejection> {
     //let secret = std::env::var("SECRET_KEY").unwrap().as_ref();
     // TODO inject from config
     let decoding_key = &DecodingKey::from_secret(secret.as_ref());
-
 
     let header = headers
         .get("Authorization")
@@ -73,17 +69,9 @@ fn fetch_jwt(headers: &HeaderMap) -> Result<JWT, JWTRejection> {
 
     let header = header.trim_start_matches("Bearer").trim();
 
-    jsonwebtoken::decode::<Claims>(
-        header,
-        decoding_key,
-        &jsonwebtoken::Validation::default(),
-    )
-        .map(|t| {
-            t.claims.into()
-        })
-        .map_err(|_| {
-            JWTRejection::InvalidSignature
-        })
+    jsonwebtoken::decode::<Claims>(header, decoding_key, &jsonwebtoken::Validation::default())
+        .map(|t| t.claims.into())
+        .map_err(|_| JWTRejection::InvalidSignature)
 }
 
 impl<S> FromRequest<S> for JWT
