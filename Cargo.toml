@@ -1,5 +1,5 @@
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [workspace]
-members = ["billing", "account", "room"]
+members = ["account", "room"]
 resolver = "2"
 
