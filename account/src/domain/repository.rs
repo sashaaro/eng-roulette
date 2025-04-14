@@ -1,8 +1,8 @@
+use crate::domain::models::*;
+use anyhow;
 use async_trait::async_trait;
 use chrono::Utc;
 use uuid::Uuid;
-use crate::domain::models::*;
-use anyhow;
 
 pub type Tx2pcID = Uuid;
 
@@ -15,7 +15,12 @@ pub trait UserRepository: Send + Sync {
 
 #[async_trait]
 pub trait PremiumRepository {
-    async fn prepare_premium_until(&self, tx2pc_id: Tx2pcID, user_id: i64, util: chrono::DateTime<Utc>) -> anyhow::Result<()>;
+    async fn prepare_premium_until(
+        &self,
+        tx2pc_id: Tx2pcID,
+        user_id: i64,
+        util: chrono::DateTime<Utc>,
+    ) -> anyhow::Result<()>;
     async fn commit_premium_until(&self, tx2pc_id: Tx2pcID) -> anyhow::Result<()>;
     // async fn rollback_premium_until(&self, tx2pc_id: Tx2pcID) -> anyhow::Result<()>;
 }

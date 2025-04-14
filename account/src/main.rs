@@ -1,20 +1,20 @@
-mod infra;
-mod domain;
 mod application;
+mod domain;
+mod infra;
 mod test;
 
-use actix_web::{App, HttpServer, web};
-use crate::infra::repository::{PgPremiumRepository, PgUserRepository};
-use crate::infra::service::InternalBillingService;
-use std::env;
-use std::sync::Arc;
 use crate::application::account::Application;
 use crate::infra::auth::AuthManager;
-use sqlx::{Pool, Postgres};
-use actix_web::web::{ServiceConfig};
+use crate::infra::repository::{PgPremiumRepository, PgUserRepository};
+use crate::infra::service::InternalBillingService;
 use actix_cors::Cors;
+use actix_web::web::ServiceConfig;
+use actix_web::{web, App, HttpServer};
 use env_logger::Builder;
-use log::{LevelFilter};
+use log::LevelFilter;
+use sqlx::{Pool, Postgres};
+use std::env;
+use std::sync::Arc;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -29,18 +29,19 @@ async fn main() -> std::io::Result<()> {
     let pool = infra::db::pg().await;
 
     let port = env::var_os("HTTP_PORT")
-        .map(|val| val.to_str()
-            .expect("invalid port")
-            .to_string().parse::<u16>()
-            .expect("invalid port"))
+        .map(|val| {
+            val.to_str()
+                .expect("invalid port")
+                .to_string()
+                .parse::<u16>()
+                .expect("invalid port")
+        })
         .unwrap_or(8081);
 
     HttpServer::new(move || {
         let cors = Cors::default()
             .send_wildcard()
-            .allowed_origin_fn(|_, _| {
-                true
-            }) // TODO only for dev
+            .allowed_origin_fn(|_, _| true) // TODO only for dev
             .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
             .allowed_headers(vec![
                 actix_web::http::header::CONTENT_TYPE,
@@ -65,8 +66,9 @@ fn config_app(pool: Pool<Postgres>) -> Box<dyn Fn(&mut ServiceConfig)> {
     });
 
     let billing = web::Data::new(InternalBillingService {
-        client: reqwest::ClientBuilder::new().build()
-            .expect("fail to create request client")
+        client: reqwest::ClientBuilder::new()
+            .build()
+            .expect("fail to create request client"),
     });
 
     Box::new(move |cfg: &mut ServiceConfig| {
@@ -75,9 +77,7 @@ fn config_app(pool: Pool<Postgres>) -> Box<dyn Fn(&mut ServiceConfig)> {
         let pa = Arc::clone(&premium_repo);
         let ba = Arc::clone(&billing);
 
-        let app = web::Data::new(Application::new(
-            ua, pa, ba,
-        ));
+        let app = web::Data::new(Application::new(ua, pa, ba));
 
         cfg.app_data(auth_manager)
             .app_data(app)

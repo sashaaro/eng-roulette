@@ -1,12 +1,12 @@
+use crate::domain::models::User;
+use crate::domain::repository;
+use crate::domain::repository::Tx2pcID;
+use async_trait::async_trait;
+use chrono::Utc;
+use sqlx::Error::RowNotFound;
+use sqlx::{Pool, Postgres, Row};
 use std::error::Error;
 use std::fmt;
-use async_trait::async_trait;
-use chrono::{Utc};
-use crate::domain::repository;
-use sqlx::{Pool, Postgres, Row};
-use sqlx::Error::RowNotFound;
-use crate::domain::models::{User};
-use crate::domain::repository::Tx2pcID;
 
 #[derive(Clone)]
 pub struct PgUserRepository {
@@ -17,35 +17,32 @@ pub struct PgUserRepository {
 impl PgUserRepository {
     // https://github.com/microsoft/cookiecutter-rust-actix-clean-architecture/blob/main/README.md
     pub fn new(pool: Pool<Postgres>) -> Self {
-        PgUserRepository {
-            pool,
-        }
+        PgUserRepository { pool }
     }
 }
 
 #[derive(Debug)]
 struct UserNotFoundError {}
-impl fmt::Display for UserNotFoundError{
+impl fmt::Display for UserNotFoundError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "user not found")
     }
 }
 
-
-impl Error for UserNotFoundError{}
+impl Error for UserNotFoundError {}
 
 #[async_trait]
 impl repository::UserRepository for PgUserRepository {
     async fn create_user(&self, username: String, password: String) -> anyhow::Result<User> {
-        let result = sqlx::query(
-            &*format!("INSERT INTO \"user\"(username, password) VALUES ($1, $2) RETURNING id;"),
-        )
-            .bind(&username)
-            .bind(&password)
-            .fetch_one(&self.pool)
-            .await?;
+        let result = sqlx::query(&*format!(
+            "INSERT INTO \"user\"(username, password) VALUES ($1, $2) RETURNING id;"
+        ))
+        .bind(&username)
+        .bind(&password)
+        .fetch_one(&self.pool)
+        .await?;
 
-        Ok(User{
+        Ok(User {
             id: result.get("id"),
             is_active: true,
             username,
@@ -55,9 +52,10 @@ impl repository::UserRepository for PgUserRepository {
     }
 
     async fn find_by_username(&self, username: &str) -> anyhow::Result<Option<User>> {
-        let row = sqlx::query(
-            "SELECT * FROM \"user\" WHERE username = $1",
-        ).bind(username).fetch_one(&self.pool).await;
+        let row = sqlx::query("SELECT * FROM \"user\" WHERE username = $1")
+            .bind(username)
+            .fetch_one(&self.pool)
+            .await;
         match row {
             Ok(row) => Ok(Some(row.into())),
             Err(RowNotFound) => Ok(None),
@@ -66,9 +64,10 @@ impl repository::UserRepository for PgUserRepository {
     }
 
     async fn find(&self, id: i64) -> anyhow::Result<Option<User>> {
-        let row = sqlx::query(
-            "SELECT * FROM \"user\" WHERE id = $1",
-        ).bind(id).fetch_one(&self.pool).await;
+        let row = sqlx::query("SELECT * FROM \"user\" WHERE id = $1")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await;
         match row {
             Ok(row) => Ok(Some(row.into())),
             Err(RowNotFound) => Ok(None),
@@ -85,25 +84,30 @@ pub struct PgPremiumRepository {
 
 #[async_trait]
 impl repository::PremiumRepository for PgPremiumRepository {
-    async fn prepare_premium_until(&self, tx_id: Tx2pcID, user_id: i64, until: chrono::DateTime<Utc>) -> anyhow::Result<()> {
+    async fn prepare_premium_until(
+        &self,
+        tx_id: Tx2pcID,
+        user_id: i64,
+        until: chrono::DateTime<Utc>,
+    ) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
 
         // TODO try lock
 
         let result = sqlx::query!(
             "UPDATE \"user\" SET premium_until = $1 WHERE id = $2",
-        until.naive_local(), i32::try_from(user_id).expect(""))
-            .execute(&mut *tx)
-            .await?;
+            until.naive_local(),
+            i32::try_from(user_id).expect("")
+        )
+        .execute(&mut *tx)
+        .await?;
 
         if result.rows_affected() == 0 {
             _ = tx.rollback().await?;
-            return Err(UserNotFoundError{}.into())
+            return Err(UserNotFoundError {}.into());
         }
 
-        sqlx::query(
-            &*format!("PREPARE TRANSACTION 'acc_{}';", tx_id),
-        )
+        sqlx::query(&*format!("PREPARE TRANSACTION 'acc_{}';", tx_id))
             .execute(&mut *tx)
             .await?;
 
@@ -111,9 +115,7 @@ impl repository::PremiumRepository for PgPremiumRepository {
     }
 
     async fn commit_premium_until(&self, tx_id: Tx2pcID) -> anyhow::Result<()> {
-        sqlx::query(
-            &*format!("COMMIT PREPARED 'acc_{}';", tx_id),
-        )
+        sqlx::query(&*format!("COMMIT PREPARED 'acc_{}';", tx_id))
             .execute(&self.pool)
             .await?;
 

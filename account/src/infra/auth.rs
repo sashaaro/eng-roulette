@@ -9,29 +9,42 @@ pub struct Claims {
 }
 
 pub struct AuthManager {
-    decoding_key:  DecodingKey,
-    encoding_key: EncodingKey
+    decoding_key: DecodingKey,
+    encoding_key: EncodingKey,
 }
 
 impl AuthManager {
     pub fn new(secret_key: String) -> AuthManager {
-        AuthManager{
+        AuthManager {
             decoding_key: DecodingKey::from_secret(secret_key.as_ref()),
             encoding_key: EncodingKey::from_secret(secret_key.as_ref()),
         }
     }
 
     pub fn auth_header(&self, claims: Claims) -> String {
-        let token = jsonwebtoken::encode(&jsonwebtoken::Header::default(), &claims, &self.encoding_key);
-        return token.unwrap()  // TODO stop use unwrap
-    }
-    pub fn fetch_claims_from_req(&self, req: &HttpRequest) -> Result<Claims, Box<dyn std::error::Error>> {
-        let mut auth_header = req.headers().get("Authorization").unwrap().to_str()?.to_string();
-        auth_header = auth_header.trim_start_matches("Bearer").trim().to_string();
-        let token = jsonwebtoken::decode::<Claims>(auth_header.as_str(),
-                                                   &self.decoding_key,
-                                                   &jsonwebtoken::Validation::default()
+        let token = jsonwebtoken::encode(
+            &jsonwebtoken::Header::default(),
+            &claims,
+            &self.encoding_key,
         );
-        return token.map(|t| t.claims ).map_err(|e| e.into())
+        return token.unwrap(); // TODO stop use unwrap
+    }
+    pub fn fetch_claims_from_req(
+        &self,
+        req: &HttpRequest,
+    ) -> Result<Claims, Box<dyn std::error::Error>> {
+        let mut auth_header = req
+            .headers()
+            .get("Authorization")
+            .unwrap()
+            .to_str()?
+            .to_string();
+        auth_header = auth_header.trim_start_matches("Bearer").trim().to_string();
+        let token = jsonwebtoken::decode::<Claims>(
+            auth_header.as_str(),
+            &self.decoding_key,
+            &jsonwebtoken::Validation::default(),
+        );
+        return token.map(|t| t.claims).map_err(|e| e.into());
     }
 }

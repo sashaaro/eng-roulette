@@ -1,5 +1,5 @@
 use chrono::NaiveDateTime;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use sqlx::postgres::PgRow;
 use sqlx::Row;
 
@@ -10,11 +10,10 @@ pub struct User {
     #[serde(skip_serializing)]
     pub password: String,
     pub is_active: bool, // or banned
-    pub premium_until: Option<NaiveDateTime>
+    pub premium_until: Option<NaiveDateTime>,
 }
 
-
-impl From<PgRow> for User{
+impl From<PgRow> for User {
     fn from(row: PgRow) -> Self {
         let id: i32 = row.get(0);
         User {

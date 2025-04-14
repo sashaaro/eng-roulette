@@ -1,17 +1,16 @@
-use actix_web::{get, HttpRequest, HttpResponse, post, Responder, web};
-use serde::{Deserialize, Serialize};
 use crate::application::account::Application;
 use crate::infra::auth::{AuthManager, Claims};
-
+use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug)]
 struct RegisterBody {
     name: String,
-    password: String
+    password: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
-pub(crate) struct RegisterResp{
+pub(crate) struct RegisterResp {
     pub token: String,
 }
 
@@ -21,7 +20,7 @@ const JWT_TTL: i64 = 60 * 60;
 async fn register(
     req_body: String,
     app: web::Data<Application>,
-    auth_manager: web::Data<AuthManager>
+    auth_manager: web::Data<AuthManager>,
 ) -> impl Responder {
     let body = serde_json::from_str::<RegisterBody>(req_body.as_str());
     if body.is_err() {
@@ -36,13 +35,9 @@ async fn register(
                 exp: chrono::Utc::now().timestamp() + JWT_TTL,
             });
 
-            HttpResponse::Ok().json(&RegisterResp{
-                token: token
-            })
-        },
-        Err(err) => {
-            HttpResponse::NotFound().body(format!("err: {:?}", err))
+            HttpResponse::Ok().json(&RegisterResp { token: token })
         }
+        Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err)),
     }
 }
 
@@ -76,9 +71,7 @@ async fn login(
 
     log::info!(user:? = user.username; "User authenticated");
 
-    HttpResponse::Ok().json(&RegisterResp{
-        token
-    })
+    HttpResponse::Ok().json(&RegisterResp { token })
 }
 
 #[get("/me")]
@@ -103,17 +96,11 @@ async fn me(
     HttpResponse::Ok().json(user)
 }
 
-
-
 #[post("/buy_premium")]
-async fn buypremium(
-    app: web::Data<Application>,
-) -> impl Responder {
+async fn buypremium(app: web::Data<Application>) -> impl Responder {
     match app.buy_premium(1).await {
         Ok(()) => HttpResponse::Ok().body("ok"),
-        Err(err) => {
-            HttpResponse::NotFound().body(format!("err: {:?}", err))
-        }
+        Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err)),
     }
     // HttpResponse::Ok().body("ok")
 }
