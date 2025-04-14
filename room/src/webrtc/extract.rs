@@ -25,11 +25,11 @@ impl IntoResponse for JWTRejection {
         match self {
             JWTRejection::InvalidAuthorizationHeader => (
                 StatusCode::UNAUTHORIZED,
-                format!("invalid authorization header"),
+                "invalid authorization header".to_string(),
             )
                 .into_response(),
             JWTRejection::InvalidSignature => {
-                (StatusCode::UNAUTHORIZED, format!("invalid signature")).into_response()
+                (StatusCode::UNAUTHORIZED, "invalid signature".to_string()).into_response()
             }
         }
     }
@@ -93,38 +93,5 @@ where
     type Rejection = JWTRejection;
     async fn from_request(req: Request, _: &S) -> Result<Self, Self::Rejection> {
         fetch_jwt(req.headers())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use axum::handler::Handler;
-    use axum::middleware::{from_extractor, from_extractor_with_state};
-    use axum::Router;
-    use axum::routing::get;
-    use http::StatusCode;
-    use crate::webrtc::extract::JWT;
-
-    #[tokio::test]
-    async fn test_extract() {
-        // let app = Router::new()
-        //     .layer(from_extractor::<JWT>())
-        //     .route(
-        //     "/",
-        //     get(async |JWT(clams)| "ok"),
-        // );
-        //
-        // return;
-
-        // let client = TestClient::new(app);
-        //
-        // let res = client.get("/").await;
-        // assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-        //
-        // let res = client
-        //     .get("/")
-        //     .header(http::header::AUTHORIZATION, "secret")
-        //     .await;
-        // assert_eq!(res.status(), StatusCode::OK);
     }
 }

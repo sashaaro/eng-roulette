@@ -129,7 +129,6 @@ async fn ws(
 
     let secret = "secret".to_string();
 
-    //let secret = std::env::var("SECRET_KEY").unwrap().as_ref();
     // TODO inject from config
     let decoding_key = &DecodingKey::from_secret(secret.as_ref());
 
@@ -198,7 +197,6 @@ async fn accept_offer(
     }))
 }
 
-// Make our own error that wraps `anyhow::Error`.
 struct AppError(anyhow::Error);
 
 impl IntoResponse for AppError {

@@ -1,9 +1,7 @@
 #[macro_use] extern crate rocket;
 
-mod application;
 mod domain;
 mod infra;
-mod lab;
 
 use core::fmt;
 use std::any::Any;
@@ -33,10 +31,7 @@ struct Income {
 #[post("/income", format = "json", data = "<data>")]
 async fn income(tx_repo: &State<Box<dyn TxRepository>>, data: Json<Income>) -> Status {
     let repo = tx_repo.inner();
-    match application::commands::income(repo, data.user_id, data.amount).await {
-        Ok(_) => Status::Ok,
-        Err(err) => Status::BadRequest,
-    }
+    unimplemented!()
 }
 
 #[derive(Deserialize)]
@@ -49,10 +44,7 @@ struct Expense {
 #[post("/prepare_expense", format = "json", data = "<data>")]
 async fn prepare_expense(tx_repo: &State<Box<dyn TxRepository>>, data: Json<Expense>) -> Status {
     let repo = tx_repo.inner();
-    match application::commands::prepare_expense(repo, data.tx_id.clone(), data.user_id, data.amount).await {
-        Ok(_) => Status::Ok,
-        Err(err) => Status::BadRequest,
-    }
+    unimplemented!()
 }
 
 
@@ -64,10 +56,7 @@ struct CommitReq {
 #[post("/commit_expense", format = "json", data = "<data>")]
 async fn commit_expense(tx_repo: &State<Box<dyn TxRepository>>, data: Json<CommitReq>) -> Status {
     let repo = tx_repo.inner();
-    match application::commands::commit_expense(repo, data.tx_id.clone()).await {
-        Ok(_) => Status::Ok,
-        Err(err) => Status::BadRequest,
-    }
+    unimplemented!()
 }
 
 
@@ -78,15 +67,9 @@ async fn main() -> Result<(), rocket::Error> {
     let journal_repo: PgJournalRepository = PgJournalRepository::new(pool.clone());
 
     journal_repo.log().await.unwrap();
-    //let d: Box<dyn TxRepository + Send> = Box::new(repo);
-
-    //let res = application::commands::income(d, 1, 2).await;
-    //application::commands::income(Box::new(repo), 1, 2);
 
     rocket::build()
-        // .manage(Box::new(repo.clone()))
         .manage(repo)
-        //.manage(d)
         .mount("/", routes![
             index,
             income,

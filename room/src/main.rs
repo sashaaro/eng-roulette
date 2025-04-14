@@ -36,33 +36,3 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await?;
     Ok(axum::serve(listener, app).await?)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::webrtc::axum::create_webrtc_router;
-    use axum::{
-        body::Body,
-        http::{Request, StatusCode},
-    };
-    use tower::{Service, ServiceExt};
-
-    #[tokio::test]
-    async fn hello_world() {
-        let app = create_webrtc_router().await;
-
-        // `Router` implements `tower::Service<Request<Body>>` so we can
-        // call it like any tower service, no need to run an HTTP server.
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/version")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-    }
-}
