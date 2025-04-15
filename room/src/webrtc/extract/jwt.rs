@@ -1,5 +1,5 @@
 use crate::webrtc::axum::SecretKey;
-use axum::extract::{FromRef, FromRequest, FromRequestParts, Query, Request};
+use axum::extract::{FromRef, FromRequest, FromRequestParts};
 use axum::response::{IntoResponse, Response};
 use http::request::Parts;
 use http::{HeaderMap, StatusCode};
@@ -8,39 +8,20 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
 use std::future::Future;
 
+// Экстрактор JWT для axum, который получает claims токена из Authorization заголовка
 #[derive(Debug)]
 pub struct JWT(pub Claims);
 
-pub enum JWTRejection {
-    InvalidAuthorizationHeader,
-    InvalidSignature,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub(crate) sub: i64,
+    pub(crate) exp: i64,
 }
 
 impl From<Claims> for JWT {
     fn from(inner: Claims) -> Self {
         Self(inner)
     }
-}
-
-impl IntoResponse for JWTRejection {
-    fn into_response(self) -> Response {
-        match self {
-            JWTRejection::InvalidAuthorizationHeader => (
-                StatusCode::UNAUTHORIZED,
-                "invalid authorization header".to_string(),
-            )
-                .into_response(),
-            JWTRejection::InvalidSignature => {
-                (StatusCode::UNAUTHORIZED, "invalid signature".to_string()).into_response()
-            }
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Claims {
-    pub(crate) sub: i64,
-    pub(crate) exp: i64,
 }
 
 impl<S> FromRequestParts<S> for JWT
@@ -69,30 +50,44 @@ fn extract_token(
     query_jwt: Option<String>,
     secret_key: SecretKey,
 ) -> Result<JWT, JWTRejection> {
-    let token: Result<String, JWTRejection> = match query_jwt {
-        Some(token) => Ok(token),
+    let token = match query_jwt {
+        Some(token) => token,
         None => {
             let header = headers
                 .get("Authorization")
                 .ok_or(JWTRejection::InvalidSignature)?
                 .to_str()
                 .map(|s| s.to_string())
-                .map_err(|_| JWTRejection::InvalidAuthorizationHeader)?
-                .clone();
+                .map_err(|_| JWTRejection::InvalidAuthorizationHeader)?;
 
             let token = header.trim_start_matches("Bearer").trim();
-            Ok(token.to_owned())
+            token.to_owned()
         }
     };
-
-    if token.is_err() {
-        return Err(token.err().unwrap());
-    }
-    let token = token?;
 
     let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
 
     jsonwebtoken::decode::<Claims>(&token, secret_key, &validation)
         .map(|t| t.claims.into())
         .map_err(|_| JWTRejection::InvalidSignature)
+}
+
+pub enum JWTRejection {
+    InvalidAuthorizationHeader,
+    InvalidSignature,
+}
+
+impl IntoResponse for JWTRejection {
+    fn into_response(self) -> Response {
+        match self {
+            JWTRejection::InvalidAuthorizationHeader => (
+                StatusCode::UNAUTHORIZED,
+                "invalid authorization header".to_string(),
+            )
+                .into_response(),
+            JWTRejection::InvalidSignature => {
+                (StatusCode::UNAUTHORIZED, "invalid signature".to_string()).into_response()
+            }
+        }
+    }
 }

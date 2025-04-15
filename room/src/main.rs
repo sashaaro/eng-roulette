@@ -1,8 +1,6 @@
-use axum::Router;
 use clap::Parser;
 use env_logger::Builder;
 use log::LevelFilter;
-use std::env;
 
 mod webrtc;
 

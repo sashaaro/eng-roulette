@@ -1,4 +1,4 @@
-use crate::webrtc::extract::{Claims, JWT};
+use crate::webrtc::extract::jwt::JWT;
 use crate::webrtc::sfu::{Signalling, SFU};
 use anyhow::Result;
 use axum::extract::ws::{Message, WebSocket};
