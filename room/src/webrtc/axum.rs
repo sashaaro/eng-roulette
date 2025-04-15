@@ -3,7 +3,6 @@ use crate::webrtc::sfu::{Signalling, SFU};
 use anyhow::Result;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{FromRef, State, WebSocketUpgrade};
-use axum::middleware::from_extractor_with_state;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, post};
 use axum::{Json, Router};
@@ -22,7 +21,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tower_http::cors::CorsLayer;
 use webrtc::ice_transport::ice_candidate::{RTCIceCandidate, RTCIceCandidateInit};
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
 
@@ -32,7 +30,7 @@ pub(crate) type SocketClient = (
 );
 
 #[derive(Clone)]
-pub struct AppState {
+pub struct WebrtcState {
     pub(crate) sessions: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>,
     pub(crate) sfu: SFU,
     pub secret_key: SecretKey,
@@ -40,8 +38,8 @@ pub struct AppState {
 
 pub type SecretKey = &'static DecodingKey;
 
-impl FromRef<AppState> for SecretKey {
-    fn from_ref(app_state: &AppState) -> SecretKey {
+impl FromRef<WebrtcState> for SecretKey {
+    fn from_ref(app_state: &WebrtcState) -> SecretKey {
         app_state.secret_key
     }
 }
@@ -122,9 +120,8 @@ impl Signalling for WebsocketSignalling {
     }
 }
 
-pub async fn create_webrtc_router() -> Router {
+pub fn create_webrtc_state() -> WebrtcState {
     let sessions = Arc::new(Mutex::new(HashMap::new()));
-
     let signalling = Box::new(WebsocketSignalling::new(Arc::clone(&sessions)));
 
     let secret_key = {
@@ -138,28 +135,25 @@ pub async fn create_webrtc_router() -> Router {
         Box::leak(Box::new(key))
     } as SecretKey; // allow SECRET_KEY life endless
 
-    let state = AppState {
+    WebrtcState {
         sfu: SFU::new(signalling),
         sessions: Arc::clone(&sessions),
         secret_key,
-    };
+    }
+}
 
-    let app = Router::new()
+pub fn create_webrtc_router() -> Router<WebrtcState> {
+    Router::new()
         .route("/ws", any(ws))
         .route("/offer", post(accept_offer))
         .route("/answer", post(accept_answer))
         .route("/candidate", post(candidate))
-        .layer(CorsLayer::permissive()) // TODO
-        .layer(from_extractor_with_state::<JWT, AppState>(state.clone()))
-        .with_state(state);
-
-    app
 }
 
 async fn ws(
     ws: WebSocketUpgrade,
     JWT(claims): JWT,
-    State(app_state): State<AppState>,
+    State(app_state): State<WebrtcState>,
 ) -> Result<impl IntoResponse, AppError> {
     let sessions = app_state.sessions.clone();
 
@@ -201,7 +195,7 @@ struct AnswerResponse {
 
 async fn accept_offer(
     JWT(claims): JWT,
-    State(app_state): State<AppState>,
+    State(app_state): State<WebrtcState>,
     Json(req): Json<AcceptOfferReq>,
 ) -> Result<impl IntoResponse, AppError> {
     let answer = app_state
@@ -252,7 +246,7 @@ struct AcceptAnswerReq {
 
 async fn accept_answer(
     JWT(claims): JWT,
-    State(app_state): State<AppState>,
+    State(app_state): State<WebrtcState>,
     Json(req): Json<AcceptAnswerReq>,
 ) -> Result<impl IntoResponse, AppError> {
     app_state
@@ -271,7 +265,7 @@ struct CandidateRequest {
 
 async fn candidate(
     JWT(claims): JWT,
-    State(app_state): State<AppState>,
+    State(app_state): State<WebrtcState>,
     Json(req): Json<CandidateRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     app_state

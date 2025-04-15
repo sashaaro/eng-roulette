@@ -1,5 +1,4 @@
 use crate::api::routes::{login, me, register};
-use crate::domain::repository::UserRepository;
 use crate::infra::auth::AuthManager;
 use crate::infra::repository::user::PgUserRepository;
 use crate::service::account::AccountService;
@@ -12,12 +11,13 @@ pub fn create_app(
     pool: Pool<Postgres>,
     secret_key: &'static str,
 ) -> Box<dyn Fn(&mut ServiceConfig)> {
-    let user_repo: Arc<dyn UserRepository> = Arc::new(PgUserRepository::new(pool.clone()));
+    let user_repo: Arc<PgUserRepository> = Arc::new(PgUserRepository::new(pool.clone()));
 
     Box::new(move |cfg: &mut ServiceConfig| {
         let auth_manager = web::Data::new(AuthManager::new(secret_key.to_string()));
 
-        let app = web::Data::new(AccountService::new(Arc::clone(&user_repo)));
+        let user_repo = Arc::clone(&user_repo);
+        let app = web::Data::new(AccountService::new(Arc::clone(&user_repo) as Arc<_>));
 
         cfg.app_data(auth_manager)
             .app_data(app)

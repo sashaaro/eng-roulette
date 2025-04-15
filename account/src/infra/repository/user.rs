@@ -1,8 +1,6 @@
 use crate::domain::models::User;
 use crate::domain::repository;
-use crate::domain::repository::Tx2pcID;
 use async_trait::async_trait;
-use chrono::Utc;
 use sqlx::Error::RowNotFound;
 use sqlx::{Pool, Postgres, Row};
 use std::error::Error;

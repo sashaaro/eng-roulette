@@ -42,8 +42,8 @@
 SECRET_KEY=$(openssl rand -hex 32)
 echo -e "\SECRET_KEY=${SECRET_KEY}" >> .env
 ```
-
-3. Запустите контейнеры:
+3. Создайте базу данные `CREATE DATABASE roulette;` и выполните `account/init.sql`
+4. Запустите контейнеры:
 
 ```bash
 docker-compose up postgres

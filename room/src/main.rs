@@ -1,6 +1,7 @@
 use clap::Parser;
 use env_logger::Builder;
 use log::LevelFilter;
+use tower_http::cors::CorsLayer;
 
 mod extract;
 mod webrtc;
@@ -30,7 +31,13 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
-    let app = webrtc::axum::create_webrtc_router().await;
+
+    let webrtc_state = webrtc::axum::create_webrtc_state();
+
+    let app = webrtc::axum::create_webrtc_router()
+        .with_state(webrtc_state)
+        .layer(CorsLayer::permissive()) // TODO
+    ;
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", args.port)).await?;
     Ok(axum::serve(listener, app).await?)
 }
