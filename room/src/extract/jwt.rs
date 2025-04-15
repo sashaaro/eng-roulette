@@ -1,10 +1,10 @@
 use crate::webrtc::axum::SecretKey;
-use axum::extract::{FromRef, FromRequest, FromRequestParts};
+use axum::extract::{FromRef, FromRequestParts};
 use axum::response::{IntoResponse, Response};
 use http::request::Parts;
 use http::{HeaderMap, StatusCode};
 use jsonwebtoken::Validation;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
 

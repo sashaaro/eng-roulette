@@ -1,13 +1,12 @@
-use crate::webrtc::extract::jwt::JWT;
+use crate::extract::jwt::JWT;
 use crate::webrtc::sfu::{Signalling, SFU};
 use anyhow::Result;
 use axum::extract::ws::{Message, WebSocket};
-use axum::extract::{FromRef, Query, State, WebSocketUpgrade};
-use axum::handler::Handler;
-use axum::middleware::{from_extractor, from_extractor_with_state};
+use axum::extract::{FromRef, State, WebSocketUpgrade};
+use axum::middleware::from_extractor_with_state;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, post};
-use axum::{Json, Router, ServiceExt};
+use axum::{Json, Router};
 use futures::executor::block_on;
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
@@ -155,11 +154,6 @@ pub async fn create_webrtc_router() -> Router {
         .with_state(state);
 
     app
-}
-
-#[derive(Deserialize)]
-struct WsRequest {
-    jwt: String,
 }
 
 async fn ws(

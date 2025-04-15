@@ -2,6 +2,7 @@ use clap::Parser;
 use env_logger::Builder;
 use log::LevelFilter;
 
+mod extract;
 mod webrtc;
 
 /// Simple program to greet a person
