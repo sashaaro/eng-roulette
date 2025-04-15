@@ -1,5 +1,5 @@
-use crate::application::account::Application;
 use crate::infra::auth::{AuthManager, Claims};
+use crate::service::account::AccountService;
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ const JWT_TTL: i64 = 60 * 60;
 #[post("/register")]
 async fn register(
     req_body: String,
-    app: web::Data<Application>,
+    app: web::Data<AccountService>,
     auth_manager: web::Data<AuthManager>,
 ) -> impl Responder {
     let body = serde_json::from_str::<RegisterBody>(req_body.as_str());
@@ -46,7 +46,7 @@ async fn login(
     req_body: String,
     _: HttpRequest,
     auth_manager: web::Data<AuthManager>,
-    app: web::Data<Application>,
+    app: web::Data<AccountService>,
 ) -> impl Responder {
     let body = serde_json::from_str::<RegisterBody>(req_body.as_str());
     if body.is_err() {
@@ -78,7 +78,7 @@ async fn login(
 async fn me(
     req: HttpRequest,
     auth_manager: web::Data<AuthManager>,
-    app: web::Data<Application>,
+    app: web::Data<AccountService>,
 ) -> impl Responder {
     let token = auth_manager.extract_claims_from_req(&req);
 
@@ -94,13 +94,4 @@ async fn me(
     let user = user.unwrap();
 
     HttpResponse::Ok().json(user)
-}
-
-#[post("/buy_premium")]
-async fn buypremium(app: web::Data<Application>) -> impl Responder {
-    match app.buy_premium(1).await {
-        Ok(()) => HttpResponse::Ok().body("ok"),
-        Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err)),
-    }
-    // HttpResponse::Ok().body("ok")
 }

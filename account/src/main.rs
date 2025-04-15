@@ -1,21 +1,16 @@
-mod application;
+mod api;
 mod domain;
 mod infra;
+mod service;
 mod test;
 
-use crate::application::account::Application;
-use crate::infra::auth::AuthManager;
-use crate::infra::repository::{PgPremiumRepository, PgUserRepository};
-use crate::infra::service::InternalBillingService;
+use crate::domain::repository::UserRepository;
 use actix_cors::Cors;
-use actix_web::web::ServiceConfig;
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpServer};
+use api::app;
 use env_logger::Builder;
 use log::LevelFilter;
-use sqlx::{Pool, Postgres};
 use std::env;
-use std::sync::Arc;
-
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     Builder::new()
@@ -61,41 +56,10 @@ async fn main() -> std::io::Result<()> {
             .max_age(3600);
 
         App::new()
-            .configure(config_app(pool.clone(), secret_key))
+            .configure(app::create_app(pool.clone(), secret_key))
             .wrap(cors)
     })
     .bind(("0.0.0.0", port))?
     .run()
     .await
-}
-
-fn config_app(pool: Pool<Postgres>, secret_key: &'static str) -> Box<dyn Fn(&mut ServiceConfig)> {
-    let user_repo = Arc::new(PgUserRepository::new(pool.clone()));
-
-    let premium_repo = web::Data::new(PgPremiumRepository {
-        // conn: connection,
-        pool: pool.clone(),
-    });
-
-    let billing = web::Data::new(InternalBillingService {
-        client: reqwest::ClientBuilder::new()
-            .build()
-            .expect("fail to create request client"),
-    });
-
-    Box::new(move |cfg: &mut ServiceConfig| {
-        let auth_manager = web::Data::new(AuthManager::new(secret_key.to_string()));
-        let ua = Arc::clone(&user_repo);
-        let pa = Arc::clone(&premium_repo);
-        let ba = Arc::clone(&billing);
-
-        let app = web::Data::new(Application::new(ua, pa, ba));
-
-        cfg.app_data(auth_manager)
-            .app_data(app)
-            .service(infra::routes::buypremium)
-            .service(infra::routes::register)
-            .service(infra::routes::login)
-            .service(infra::routes::me);
-    })
 }

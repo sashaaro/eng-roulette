@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::config_app;
+    use crate::api::app::create_app;
     use crate::infra::db;
     use crate::infra::routes::RegisterResp;
     use actix_web::body::to_bytes;
@@ -15,7 +15,7 @@ mod tests {
         let pool = db::pg().await;
 
         let app =
-            test::init_service(App::new().configure(config_app(pool.clone(), SECRET_KEY))).await;
+            test::init_service(App::new().configure(create_app(pool.clone(), SECRET_KEY))).await;
 
         let req = test::TestRequest::post().uri("/").to_request();
         let resp = test::call_service(&app, req).await;
@@ -27,7 +27,7 @@ mod tests {
         let pool = db::pg().await;
 
         let app =
-            test::init_service(App::new().configure(config_app(pool.clone(), SECRET_KEY))).await;
+            test::init_service(App::new().configure(create_app(pool.clone(), SECRET_KEY))).await;
 
         pool.execute("truncate users cascade").await.unwrap();
 
