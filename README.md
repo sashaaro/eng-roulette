@@ -49,7 +49,7 @@ echo -e "\SECRET_KEY=${SECRET_KEY}" >> .env
 docker-compose up postgres
 cargo run --bin account # запускаем сервис account
 cargo run --bin room # запускаем сервис room
-npm run dev # запускаем сервис react spa
+VITE_ACCOUNT_API=http://localhost:8081 VITE_ROOM_API=http://localhost:8082 npm run dev # запускаем сервис react spa
 ```
 Frontend будет доступен на http://localhost:3000
 
