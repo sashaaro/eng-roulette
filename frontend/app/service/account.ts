@@ -1,15 +1,5 @@
 import axios, {type AxiosInstance} from 'axios';
-
-
-export const createBaseURL = function (port: string, protocol?: string): string {
-    if (typeof window !== 'undefined' && window.location?.port != "") {
-        const location: any = window.location;
-
-        return (protocol || location.protocol) + '//'+location.hostname+':' + port
-    } else {
-        return 'http://localhost:' + port
-    }
-}
+import config from "~/service/config";
 
 interface TokenResponse {
     token: string;
@@ -23,11 +13,7 @@ interface UserResponse {
 export class AccountService {
     private axiosClient: AxiosInstance;
 
-    constructor(baseURL?: string) {
-        if (!baseURL) {
-            baseURL = createBaseURL("8080")
-        }
-
+    constructor(baseURL: string) {
         this.axiosClient = axios.create({
             baseURL: baseURL,
             headers: {'Content-Type': 'application/json'},
@@ -54,6 +40,4 @@ export class AccountService {
     }
 }
 
-export const accountService = new AccountService(
-    import.meta.env.VITE_ACCOUNT_API || "https://roulette.botenza.org/api/account" // TODO parameterize baseURL
-);
+export const accountService = new AccountService(config.accountURL);

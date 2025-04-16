@@ -1,9 +1,7 @@
 import axios, {type AxiosInstance} from "axios";
 import type {User} from "~/context/session";
-import {createWS} from "~/service/ws";
-import {createBaseURL} from "~/service/account";
 import { EventEmitter } from 'eventemitter3'
-import {braceExpand} from "minimatch";
+import config from "~/service/config";
 
 
 function callbackToPromise(): any {
@@ -29,11 +27,7 @@ export class RoomService {
     private ws: WebSocket | undefined;
     private stream?: MediaStream;
 
-    constructor(baseURL?: string) {
-        if (!baseURL) {
-            baseURL = createBaseURL("8081")
-        }
-
+    constructor(baseURL: string) {
         this.axiosClient = axios.create({
             baseURL: baseURL,
             headers: {'Content-Type': 'application/json'},
@@ -42,13 +36,7 @@ export class RoomService {
 
     private async createWS(token: string): Promise<WebSocket> {
         if (!this.ws) {
-            let baseURL =  "wss://roulette.botenza.org/api/room";
-            if (import.meta.env.VITE_ROOM_API) {
-                const url = new URL(import.meta.env.VITE_ROOM_API);
-                baseURL = (url.protocol === "https" ? "wss" : "ws") + ":" + url.host
-            }
-
-            this.ws = await createWS(baseURL, token);
+            this.ws = new WebSocket(config.roomWS + "/ws?jwt=" + token)
             const {callback, promise } = callbackToPromise()
             this.ws.addEventListener("open", callback);
             await promise;
@@ -215,6 +203,4 @@ export class RoomService {
     }
 }
 
-export const roomService = new RoomService(
-    import.meta.env.VITE_ROOM_API || "https://roulette.botenza.org/api/room"
-);
+export const roomService = new RoomService(config.roomURL);
