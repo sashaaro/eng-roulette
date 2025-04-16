@@ -6,16 +6,11 @@ use tower_http::cors::CorsLayer;
 mod extract;
 mod webrtc;
 
-/// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Args {
-    /// Number of times to greet
     #[arg(short, long, default_value_t = 8082)]
     pub port: u16,
-
-    #[arg(short, long, default_value_t = false)]
-    pub webrtc: bool,
 }
 
 #[tokio::main]

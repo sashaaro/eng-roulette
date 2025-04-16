@@ -1,4 +1,4 @@
-use crate::extract::jwt::JWT;
+use crate::extract::jwt::{SecretKey, JWT};
 use crate::webrtc::sfu::{Signalling, SFU};
 use anyhow::Result;
 use axum::extract::ws::{Message, WebSocket};
@@ -35,8 +35,6 @@ pub struct WebrtcState {
     pub(crate) sfu: SFU,
     pub secret_key: SecretKey,
 }
-
-pub type SecretKey = &'static DecodingKey;
 
 impl FromRef<WebrtcState> for SecretKey {
     fn from_ref(app_state: &WebrtcState) -> SecretKey {

@@ -1,9 +1,8 @@
-use crate::webrtc::axum::SecretKey;
 use axum::extract::{FromRef, FromRequestParts};
 use axum::response::{IntoResponse, Response};
 use http::request::Parts;
 use http::{HeaderMap, StatusCode};
-use jsonwebtoken::Validation;
+use jsonwebtoken::{DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
@@ -18,11 +17,7 @@ pub struct Claims {
     pub(crate) exp: i64,
 }
 
-impl From<Claims> for JWT {
-    fn from(inner: Claims) -> Self {
-        Self(inner)
-    }
-}
+pub type SecretKey = &'static DecodingKey;
 
 impl<S> FromRequestParts<S> for JWT
 where
@@ -68,7 +63,7 @@ fn extract_token(
     let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
 
     jsonwebtoken::decode::<Claims>(&token, secret_key, &validation)
-        .map(|t| t.claims.into())
+        .map(|t| JWT(t.claims))
         .map_err(|_| JWTRejection::InvalidSignature)
 }
 
@@ -80,14 +75,11 @@ pub enum JWTRejection {
 impl IntoResponse for JWTRejection {
     fn into_response(self) -> Response {
         match self {
-            JWTRejection::InvalidAuthorizationHeader => (
-                StatusCode::UNAUTHORIZED,
-                "invalid authorization header".to_string(),
-            )
-                .into_response(),
-            JWTRejection::InvalidSignature => {
-                (StatusCode::UNAUTHORIZED, "invalid signature".to_string()).into_response()
+            JWTRejection::InvalidAuthorizationHeader => {
+                (StatusCode::UNAUTHORIZED, "invalid authorization header")
             }
+            JWTRejection::InvalidSignature => (StatusCode::UNAUTHORIZED, "invalid signature"),
         }
+        .into_response()
     }
 }
