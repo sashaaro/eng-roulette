@@ -49,7 +49,7 @@ echo -e "\SECRET_KEY=${SECRET_KEY}" >> .env
 docker-compose up postgres
 cargo run --bin account # запускаем сервис account
 cargo run --bin room # запускаем сервис room
-VITE_ACCOUNT_API=http://localhost:8081 VITE_ROOM_API=http://localhost:8082 npm run dev # запускаем сервис react spa
+npm run dev # запускаем сервис react spa
 ```
 Frontend будет доступен на http://localhost:3000
 
@@ -71,9 +71,10 @@ SERVER=myserver.ru docker compose up -d
 Это поднимет сервисы traefik, proxy и tunnel, необходимые для туннеля и HTTPS.
 
 2. Локально:
-    - Запустите tunnel
+    - Запустите tunnel и frontend c env переменными
 ```bash
 make tunnel SERVER=myserver.ru
+VITE_ACCOUNT_API=https://myserver.ru/api/account VITE_ROOM_API=https://myserver.ru/api/room
 ```
 
 Этот скрипт установит безопасный туннель между локальным окружением и сервером.
