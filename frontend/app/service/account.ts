@@ -55,5 +55,5 @@ export class AccountService {
 }
 
 export const accountService = new AccountService(
-    "https://roulette.botenza.org/api/account" // TODO parameterize baseURL
+    import.meta.env.VITE_ACCOUNT_API || "https://roulette.botenza.org/api/account" // TODO parameterize baseURL
 );

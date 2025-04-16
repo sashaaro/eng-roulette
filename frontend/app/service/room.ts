@@ -42,7 +42,11 @@ export class RoomService {
 
     private async createWS(token: string): Promise<WebSocket> {
         if (!this.ws) {
-            let baseURL = "wss://roulette.botenza.org/api/room";  // TODO parameterize baseURL
+            let baseURL =  "wss://roulette.botenza.org/api/room";
+            if (import.meta.env.VITE_ROOM_API) {
+                const url = new URL(import.meta.env.VITE_ROOM_API);
+                baseURL = (url.protocol === "https" ? "wss" : "ws") + ":" + url.host
+            }
 
             this.ws = await createWS(baseURL, token);
             const {callback, promise } = callbackToPromise()
@@ -212,5 +216,5 @@ export class RoomService {
 }
 
 export const roomService = new RoomService(
-    "https://roulette.botenza.org/api/room" // TODO parameterize baseURL
+    import.meta.env.VITE_ROOM_API || "https://roulette.botenza.org/api/room"
 );
