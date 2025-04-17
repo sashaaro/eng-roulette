@@ -1,11 +1,11 @@
 use crate::domain::models::*;
 use anyhow;
 use async_trait::async_trait;
-use uuid::Uuid;
-
-pub type Tx2pcID = Uuid;
+#[cfg(test)]
+use mockall::{automock, mock, predicate::*};
 
 #[async_trait]
+#[cfg_attr(test, automock)]
 pub trait UserRepository: Send + Sync {
     async fn create_user(&self, name: String, password: String) -> anyhow::Result<User>;
     async fn find(&self, id: i64) -> anyhow::Result<Option<User>>;

@@ -1,6 +1,7 @@
 use crate::domain::models::User;
 use crate::domain::repository::UserRepository;
 use crate::service::account::AppError::WrongPassword;
+use anyhow::Result;
 use std::sync::Arc;
 use thiserror;
 use thiserror::Error;
@@ -22,11 +23,11 @@ impl AccountService {
         AccountService { user_repo }
     }
 
-    pub async fn create_user(&self, name: String, password: String) -> anyhow::Result<User> {
+    pub async fn create_user(&self, name: String, password: String) -> Result<User> {
         self.user_repo.create_user(name, password).await
     }
 
-    pub async fn login(&self, name: String, password: String) -> anyhow::Result<User> {
+    pub async fn login(&self, name: String, password: String) -> Result<User> {
         let user = self.user_repo.find_by_username(name.as_str()).await;
         match user {
             Err(err) => Err(err),
@@ -42,7 +43,7 @@ impl AccountService {
         }
     }
 
-    pub async fn me(&self, id: i64) -> anyhow::Result<User> {
+    pub async fn me(&self, id: i64) -> Result<User> {
         let user = self.user_repo.find(id).await;
         match user {
             Err(err) => Err(err),

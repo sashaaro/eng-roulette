@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod tests {
     use crate::api::app::create_app;
+    use crate::api::routes::RegisterResponse;
     use crate::infra::db;
     use actix_web::body::to_bytes;
     use actix_web::http::header::ContentType;
     use actix_web::{test, App};
     use sqlx::Executor;
-    use crate::api::routes::RegisterResponse;
 
     const SECRET_KEY: &str = "53b65289550252052c61406f0f3dad24";
 
