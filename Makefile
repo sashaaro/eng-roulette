@@ -8,5 +8,4 @@ check:
 
 test:
 	# TODO auto migrate db
-	cargo test --package account --bin account
-	cargo test --package room --bin room
+	cargo test -p account -p room

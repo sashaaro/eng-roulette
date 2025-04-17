@@ -42,12 +42,10 @@ impl AccountService {
     }
 
     pub async fn me(&self, id: i64) -> Result<User> {
-        let user = self.user_repo.find(id).await;
-        match user {
-            Err(err) => Err(err),
-            Ok(Some(user)) if user.is_active => Ok(user),
-            Ok(None) => Err(AppError::NotFound.into()),
-            _ => unreachable!(),
-        }
+        self.user_repo
+            .find(id)
+            .await?
+            .filter(|u| u.is_active)
+            .ok_or_else(|| AppError::NotFound.into())
     }
 }

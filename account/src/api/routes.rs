@@ -10,7 +10,7 @@ struct RegisterBody {
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
-pub(crate) struct RegisterResponse {
+pub struct RegisterResponse {
     pub token: String,
 }
 

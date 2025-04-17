@@ -38,13 +38,10 @@ impl repository::UserRepository for PgUserRepository {
     async fn find(&self, id: i64) -> anyhow::Result<Option<User>> {
         let row = sqlx::query("SELECT * FROM users WHERE id = $1")
             .bind(id)
-            .fetch_one(&self.pool)
-            .await;
-        match row {
-            Ok(row) => Ok(Some(row.into())),
-            Err(RowNotFound) => Ok(None),
-            Err(err) => Err(err.into()),
-        }
+            .fetch_optional(&self.pool)
+            .await?;
+
+        Ok(row.map(|r| r.into()))
     }
 
     async fn find_by_username(&self, username: &str) -> anyhow::Result<Option<User>> {
