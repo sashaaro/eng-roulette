@@ -10,7 +10,7 @@ struct RegisterBody {
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
-pub(crate) struct RegisterResp {
+pub(crate) struct RegisterResponse {
     pub token: String,
 }
 
@@ -35,7 +35,7 @@ async fn register(
                 exp: chrono::Utc::now().timestamp() + JWT_TTL,
             });
 
-            HttpResponse::Ok().json(&RegisterResp { token: token })
+            HttpResponse::Ok().json(&RegisterResponse { token: token })
         }
         Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err)),
     }
@@ -71,7 +71,7 @@ async fn login(
 
     log::info!(user:? = user.username; "User authenticated");
 
-    HttpResponse::Ok().json(&RegisterResp { token })
+    HttpResponse::Ok().json(&RegisterResponse { token })
 }
 
 #[get("/me")]
