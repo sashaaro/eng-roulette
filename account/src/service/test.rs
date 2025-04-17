@@ -12,9 +12,9 @@ mod tests {
         user_repo
             .expect_find_by_username()
             .with(eq("alex"))
-            .return_once(|_| {
+            .returning(|_| {
                 Box::pin(async {
-                    Ok(Some(crate::domain::models::User {
+                    Ok(Some(crate::domain::model::User {
                         id: 1,
                         username: "alex".to_string(),
                         password: "my_password".to_string(),
@@ -22,15 +22,19 @@ mod tests {
                         premium_until: None,
                     }))
                 })
-            })
-            .times(1);
+            });
 
         let account_service = AccountService::new(Arc::new(user_repo));
         let logged_user = account_service
             .login("alex".to_string(), "my_password".to_string())
             .await;
+        assert!(logged_user.is_ok());
 
-        assert_eq!(logged_user.is_ok(), true);
+        let logged_user = account_service
+            .login("alex".to_string(), "wrong password".to_string())
+            .await;
+        assert!(logged_user.is_err());
+
         Ok(())
     }
 }

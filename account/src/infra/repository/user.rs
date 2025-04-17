@@ -1,4 +1,4 @@
-use crate::domain::models::User;
+use crate::domain::model::User;
 use crate::domain::repository;
 use async_trait::async_trait;
 use sqlx::Error::RowNotFound;

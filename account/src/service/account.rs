@@ -1,4 +1,4 @@
-use crate::domain::models::User;
+use crate::domain::model::User;
 use crate::domain::repository::UserRepository;
 use crate::service::account::AppError::WrongPassword;
 use anyhow::Result;
