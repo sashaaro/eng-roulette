@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+use crate::api::goauth2::goauth2;
 use crate::infra::auth::{AuthManager, Claims};
 use crate::service::account::AccountService;
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
+use oauth2::{CsrfToken, PkceCodeChallenge, RedirectUrl, Scope};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -10,7 +13,7 @@ struct RegisterBody {
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
-pub(crate) struct RegisterResp {
+pub(crate) struct RegisterResponse {
     pub token: String,
 }
 
@@ -35,7 +38,7 @@ async fn register(
                 exp: chrono::Utc::now().timestamp() + JWT_TTL,
             });
 
-            HttpResponse::Ok().json(&RegisterResp { token: token })
+            HttpResponse::Ok().json(&RegisterResponse { token: token })
         }
         Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err)),
     }
@@ -71,7 +74,7 @@ async fn login(
 
     log::info!(user:? = user.username; "User authenticated");
 
-    HttpResponse::Ok().json(&RegisterResp { token })
+    HttpResponse::Ok().json(&RegisterResponse { token })
 }
 
 #[get("/me")]
@@ -94,4 +97,37 @@ async fn me(
     let user = user.unwrap();
 
     HttpResponse::Ok().json(user)
+}
+
+#[get("/auth/google")]
+async fn google_auth(req: HttpRequest) -> impl Responder {
+    let client = goauth2();
+
+    #[derive(Debug, Deserialize)]
+    pub struct Params {
+        redirect_url: String,
+    }
+
+
+    let params = web::Query::<Params>::from_query(req.query_string()).unwrap();
+
+    let client = client.set_redirect_uri(
+        RedirectUrl::new(params.redirect_url.to_string()).unwrap()
+    );
+
+    let http_client = reqwest::ClientBuilder::new()
+        // Following redirects opens the client up to SSRF vulnerabilities.
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("Client should build");
+
+    let (pkce_code_challenge, pkce_code_verifier) = PkceCodeChallenge::new_random_sha256();
+
+    let (authorize_url, csrf_state) = client
+        .authorize_url(CsrfToken::new_random)
+        .add_scope(Scope::new("email".to_string()))
+        .set_pkce_challenge(pkce_code_challenge)
+        .url();
+
+    authorize_url.to_string()
 }

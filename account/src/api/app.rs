@@ -1,4 +1,4 @@
-use crate::api::routes::{login, me, register};
+use crate::api::routes::{google_auth, login, me, register};
 use crate::infra::auth::AuthManager;
 use crate::infra::repository::user::PgUserRepository;
 use crate::service::account::AccountService;
@@ -23,6 +23,7 @@ pub fn create_app(
             .app_data(app)
             .service(register)
             .service(login)
+            .service(google_auth)
             .service(me);
     })
 }

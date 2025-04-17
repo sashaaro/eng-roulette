@@ -38,6 +38,12 @@ export class AccountService {
         });
         return response.data;
     }
+
+    async googleAuth() {
+        const response = await this.axiosClient.get<string>("/auth/google?redirect_url=" + location.origin + "/auth/google/callback", );
+        return response.data;
+    }
+
 }
 
 export const accountService = new AccountService(config.accountURL);

@@ -30,13 +30,15 @@ where
         parts: &mut Parts,
         state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+
         let query_jwt = parts.uri.query().and_then(|query| {
             serde_urlencoded::from_str::<HashMap<String, String>>(query)
                 .ok()
                 .and_then(|params| params.get("jwt").map(|s| s.to_owned()))
         });
 
-        async { extract_token(&parts.headers, query_jwt, SecretKey::from_ref(state)) }
+        async {
+            extract_token(&parts.headers, query_jwt, SecretKey::from_ref(state)) }
     }
 }
 
