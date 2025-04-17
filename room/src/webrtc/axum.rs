@@ -1,5 +1,5 @@
-use crate::extract::jwt::{SecretKey, Jwt};
-use crate::webrtc::sfu::{Signalling, Sfu};
+use crate::extract::jwt::{Jwt, SecretKey};
+use crate::webrtc::sfu::{Sfu, Signalling};
 use anyhow::Result;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{FromRef, State, WebSocketUpgrade};

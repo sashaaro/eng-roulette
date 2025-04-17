@@ -47,6 +47,9 @@ jobs:
       - name: Wait for PostgreSQL
         run: sleep 5  # Даём время PostgreSQL запуститься
 
+      - name: Run Clippy (Rust linter)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
       - name: Run tests
         run: |
           make test

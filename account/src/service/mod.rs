@@ -1,2 +1,2 @@
 pub mod account;
-mod test;
+mod tests;

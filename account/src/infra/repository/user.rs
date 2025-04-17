@@ -18,11 +18,12 @@ impl PgUserRepository {
 #[async_trait]
 impl repository::UserRepository for PgUserRepository {
     async fn create_user(&self, username: String, password: String) -> anyhow::Result<User> {
-        let result = sqlx::query("INSERT INTO users(username, password) VALUES ($1, $2) RETURNING id;")
-        .bind(&username)
-        .bind(&password)
-        .fetch_one(&self.pool)
-        .await?;
+        let result =
+            sqlx::query("INSERT INTO users(username, password) VALUES ($1, $2) RETURNING id;")
+                .bind(&username)
+                .bind(&password)
+                .fetch_one(&self.pool)
+                .await?;
 
         Ok(User {
             id: result.get("id"),
