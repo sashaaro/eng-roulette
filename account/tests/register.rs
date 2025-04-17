@@ -51,7 +51,7 @@ mod tests {
         let b = std::str::from_utf8(&b).unwrap();
 
         let dto: RegisterResponse = serde_json::from_str(b).expect("Failed to parse json");
-        assert_eq!(true, dto.token.len() > 0);
+        assert!(!dto.token.is_empty());
 
         let req = test::TestRequest::get()
             .insert_header((

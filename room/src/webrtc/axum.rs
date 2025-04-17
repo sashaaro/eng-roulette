@@ -1,5 +1,5 @@
-use crate::extract::jwt::{SecretKey, JWT};
-use crate::webrtc::sfu::{Signalling, SFU};
+use crate::extract::jwt::{SecretKey, Jwt};
+use crate::webrtc::sfu::{Signalling, Sfu};
 use anyhow::Result;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{FromRef, State, WebSocketUpgrade};
@@ -32,7 +32,7 @@ pub(crate) type SocketClient = (
 #[derive(Clone)]
 pub struct WebrtcState {
     pub(crate) sessions: Arc<Mutex<HashMap<String, Arc<SocketClient>>>>,
-    pub(crate) sfu: SFU,
+    pub(crate) sfu: Sfu,
     pub secret_key: SecretKey,
 }
 
@@ -46,7 +46,7 @@ impl FromRef<WebrtcState> for SecretKey {
 #[serde(tag = "type", content = "playground")]
 pub enum SignalingResponse {
     #[serde(rename = "sdp")]
-    Sdp(RTCSessionDescription),
+    Sdp(Box<RTCSessionDescription>),
 
     #[serde(rename = "candidate")]
     Candidate(Option<RTCIceCandidate>),
@@ -81,7 +81,7 @@ impl Signalling for WebsocketSignalling {
                 Err(SfuError::SessionNotFound.into())
             } else {
                 let session = session.unwrap();
-                let playground = serde_json::to_string(&SignalingResponse::Sdp(sdp))?;
+                let playground = serde_json::to_string(&SignalingResponse::Sdp(Box::new(sdp)))?;
                 session
                     .0
                     .lock()
@@ -134,7 +134,7 @@ pub fn create_webrtc_state() -> WebrtcState {
     } as SecretKey; // allow SECRET_KEY life endless
 
     WebrtcState {
-        sfu: SFU::new(signalling),
+        sfu: Sfu::new(signalling),
         sessions: Arc::clone(&sessions),
         secret_key,
     }
@@ -150,7 +150,7 @@ pub fn create_webrtc_router() -> Router<WebrtcState> {
 
 async fn ws(
     ws: WebSocketUpgrade,
-    JWT(claims): JWT,
+    Jwt(claims): Jwt,
     State(app_state): State<WebrtcState>,
 ) -> Result<impl IntoResponse, AppError> {
     let sessions = app_state.sessions.clone();
@@ -192,7 +192,7 @@ struct AnswerResponse {
 }
 
 async fn accept_offer(
-    JWT(claims): JWT,
+    Jwt(claims): Jwt,
     State(app_state): State<WebrtcState>,
     Json(req): Json<AcceptOfferReq>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -211,11 +211,8 @@ impl IntoResponse for AppError {
         error!(err:? = self.0; "Failed response");
 
         if let Some(jwt_err) = self.0.downcast_ref::<jsonwebtoken::errors::Error>() {
-            match jwt_err.kind() {
-                ErrorKind::ExpiredSignature => {
-                    return (StatusCode::UNAUTHORIZED, format!("token expired")).into_response();
-                }
-                _ => {}
+            if let ErrorKind::ExpiredSignature = jwt_err.kind() {
+                return (StatusCode::UNAUTHORIZED, "token expired".to_string()).into_response();
             }
         };
 
@@ -243,7 +240,7 @@ struct AcceptAnswerReq {
 }
 
 async fn accept_answer(
-    JWT(claims): JWT,
+    Jwt(claims): Jwt,
     State(app_state): State<WebrtcState>,
     Json(req): Json<AcceptAnswerReq>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -262,7 +259,7 @@ struct CandidateRequest {
 }
 
 async fn candidate(
-    JWT(claims): JWT,
+    Jwt(claims): Jwt,
     State(app_state): State<WebrtcState>,
     Json(req): Json<CandidateRequest>,
 ) -> Result<impl IntoResponse, AppError> {

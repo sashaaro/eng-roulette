@@ -51,7 +51,7 @@ use std::future::Future;
 // # Ошибки
 // Возвращает 401 Unauthorized, если токен отсутствует, невалиден или имеет неверную подпись.
 #[derive(Debug)]
-pub struct JWT(pub Claims);
+pub struct Jwt(pub Claims);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -61,7 +61,7 @@ pub struct Claims {
 
 pub type SecretKey = &'static DecodingKey;
 
-impl<S> FromRequestParts<S> for JWT
+impl<S> FromRequestParts<S> for Jwt
 where
     SecretKey: FromRef<S>,
     S: Send + Sync,
@@ -86,7 +86,7 @@ fn extract_token(
     headers: &HeaderMap,
     query_jwt: Option<String>,
     secret_key: SecretKey,
-) -> Result<JWT, JWTRejection> {
+) -> Result<Jwt, JWTRejection> {
     let token = match query_jwt {
         Some(token) => token,
         None => {
@@ -109,7 +109,7 @@ fn extract_token(
     let validation = Validation::new(jsonwebtoken::Algorithm::HS256);
 
     jsonwebtoken::decode::<Claims>(&token, secret_key, &validation)
-        .map(|t| JWT(t.claims))
+        .map(|t| Jwt(t.claims))
         .map_err(|_| JWTRejection::InvalidSignature)
 }
 
