@@ -2,7 +2,7 @@ use crate::domain::models::*;
 use anyhow;
 use async_trait::async_trait;
 #[cfg(test)]
-use mockall::{automock, mock, predicate::*};
+use mockall::{automock, predicate::*};
 
 #[async_trait]
 #[cfg_attr(test, automock)]

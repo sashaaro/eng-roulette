@@ -2,7 +2,7 @@
 mod tests {
     use crate::domain::repository::MockUserRepository;
     use crate::service::account::AccountService;
-    use anyhow::{bail, Result};
+    use anyhow::Result;
     use mockall::predicate::eq;
     use std::sync::Arc;
 

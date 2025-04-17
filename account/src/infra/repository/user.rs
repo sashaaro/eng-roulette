@@ -3,8 +3,6 @@ use crate::domain::repository;
 use async_trait::async_trait;
 use sqlx::Error::RowNotFound;
 use sqlx::{Pool, Postgres, Row};
-use std::error::Error;
-use std::fmt;
 
 #[derive(Clone)]
 pub struct PgUserRepository {
@@ -16,16 +14,6 @@ impl PgUserRepository {
         PgUserRepository { pool }
     }
 }
-
-#[derive(Debug)]
-struct UserNotFoundError {}
-impl fmt::Display for UserNotFoundError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "user not found")
-    }
-}
-
-impl Error for UserNotFoundError {}
 
 #[async_trait]
 impl repository::UserRepository for PgUserRepository {

@@ -22,23 +22,24 @@ async fn register(
     app: web::Data<AccountService>,
     auth_manager: web::Data<AuthManager>,
 ) -> impl Responder {
-    let body = serde_json::from_str::<RegisterBody>(req_body.as_str());
-    if body.is_err() {
-        return HttpResponse::BadRequest().body(format!("err: {:?}", body.err()));
-    }
-
-    let b = body.unwrap();
-    match app.create_user(b.name, b.password).await {
-        Ok(user) => {
-            let token = auth_manager.auth_header(Claims {
-                sub: user.id as i64,
-                exp: chrono::Utc::now().timestamp() + JWT_TTL,
-            });
-
-            HttpResponse::Ok().json(&RegisterResponse { token: token })
+    let body = match serde_json::from_str::<RegisterBody>(req_body.as_str()) {
+        Ok(body) => body,
+        Err(err) => {
+            return HttpResponse::BadRequest().body(format!("err: {:?}", err));
         }
-        Err(err) => HttpResponse::NotFound().body(format!("err: {:?}", err)),
-    }
+    };
+
+    let user = match app.create_user(body.name, body.password).await {
+        Ok(user) => user,
+        Err(err) => return HttpResponse::NotFound().body(format!("err: {:?}", err)),
+    };
+
+    let token = auth_manager.auth_header(Claims {
+        sub: user.id as i64,
+        exp: chrono::Utc::now().timestamp() + JWT_TTL,
+    });
+
+    HttpResponse::Ok().json(&RegisterResponse { token })
 }
 
 #[post("/login")]
@@ -48,21 +49,19 @@ async fn login(
     auth_manager: web::Data<AuthManager>,
     app: web::Data<AccountService>,
 ) -> impl Responder {
-    let body = serde_json::from_str::<RegisterBody>(req_body.as_str());
-    if body.is_err() {
-        return HttpResponse::BadRequest().body(format!("err: {:?}", body.err()));
-    }
+    let body = match serde_json::from_str::<RegisterBody>(req_body.as_str()) {
+        Ok(b) => b,
+        Err(err) => return HttpResponse::BadRequest().body(format!("err: {:?}", err)),
+    };
+    let user = app.login(body.name.clone(), body.password.clone()).await;
 
-    let b = body.unwrap();
-
-    let user = app.login(b.name.clone(), b.password.clone()).await;
-
-    if user.is_err() {
-        log::info!(username:? = b.name; "Failed login attempt");
-
-        return HttpResponse::NotFound().body(format!("err: {:?}", user.err()));
-    }
-    let user = user.unwrap();
+    let user = match user {
+        Ok(user) => user,
+        Err(err) => {
+            log::info!(username:? = body.name; "Failed login attempt");
+            return HttpResponse::NotFound().body(format!("err: {:?}", err));
+        }
+    };
 
     let token = auth_manager.auth_header(Claims {
         sub: user.id as i64,
@@ -80,18 +79,19 @@ async fn me(
     auth_manager: web::Data<AuthManager>,
     app: web::Data<AccountService>,
 ) -> impl Responder {
-    let token = auth_manager.extract_claims_from_req(&req);
+    let token = match auth_manager.extract_claims_from_req(&req) {
+        Ok(token) => token,
+        Err(err) => {
+            return HttpResponse::BadRequest().body(format!("err: {:?}", err));
+        }
+    };
 
-    if token.is_err() {
-        return HttpResponse::BadRequest().body(format!("err: {:?}", token.err()));
-    }
-
-    let user = app.me(token.unwrap().sub).await;
-
-    if user.is_err() {
-        return HttpResponse::InternalServerError().body("err");
-    }
-    let user = user.unwrap();
+    let user = match app.me(token.sub).await {
+        Ok(user) => user,
+        Err(_) => {
+            return HttpResponse::InternalServerError().body("err");
+        }
+    };
 
     HttpResponse::Ok().json(user)
 }
