@@ -28,18 +28,16 @@ impl AccountService {
     }
 
     pub async fn login(&self, name: String, password: String) -> Result<User> {
-        let user = self.user_repo.find_by_username(name.as_str()).await;
+        let user = self.user_repo.find_by_username(name.as_str()).await?;
         match user {
-            Err(err) => Err(err),
-            Ok(Some(user)) if user.is_active => {
-                if password == user.password {
+            Some(user) => {
+                if user.is_active && password == user.password {
                     Ok(user)
                 } else {
                     Err(WrongPassword.into())
                 }
             }
-            Ok(None) => Err(AppError::NotFound.into()),
-            _ => unreachable!(),
+            None => Err(AppError::NotFound.into()),
         }
     }
 
