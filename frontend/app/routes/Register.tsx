@@ -3,7 +3,7 @@ import {SessionContext} from "~/context/session";
 import {useContext} from "react";
 import Login from "~/component/Login";
 
-export default function RegisterPage({ loaderData }: Route.ComponentProps) {
+export default function Register({ loaderData }: Route.ComponentProps) {
     const session = useContext(SessionContext);
 
 

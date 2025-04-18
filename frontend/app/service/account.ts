@@ -10,6 +10,7 @@ interface UserResponse {
     username: string;
 }
 
+
 export class AccountService {
     private axiosClient: AxiosInstance;
 
@@ -38,6 +39,26 @@ export class AccountService {
         });
         return response.data;
     }
+
+    async googleAuth(origin: string) {
+        const redirectURL = origin + "/auth/google/callback";
+        const response = await this.axiosClient.get<{authorize_url: string, pkce_code_verifier: string}>("/auth/google?redirect_url=" + redirectURL);
+        return response.data;
+    }
+
+    async googleAuthCallback(
+        state: string,
+        code: string,
+        pkce_code_verifier: string,
+        origin: string
+        ) {
+        const redirectURL = origin + "/auth/google/callback";
+
+
+        const response = await this.axiosClient.get<{ token: string }>("/auth/google/callback?state=" + state + "&code=" + code + "&pkce_code_verifier=" + pkce_code_verifier + "&redirect_url=" + redirectURL);
+        return response.data.token;
+    }
+
 }
 
 export const accountService = new AccountService(config.accountURL);
