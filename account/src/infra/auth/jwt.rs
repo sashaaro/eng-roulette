@@ -8,22 +8,31 @@ pub struct Claims {
     pub(crate) exp: i64,
 }
 
-pub struct AuthManager {
+pub struct JwtManager {
     secret_key: String,
     decoding_key: DecodingKey,
 }
 
-impl AuthManager {
-    pub fn new(secret_key: String) -> AuthManager {
+const JWT_TTL: i64 = 60 * 60;
+
+impl JwtManager {
+    pub fn new(secret_key: String) -> JwtManager {
         let decoding_key = DecodingKey::from_secret(secret_key.as_ref());
 
-        AuthManager {
+        JwtManager {
             secret_key,
             decoding_key,
         }
     }
 
-    pub fn auth_header(&self, claims: Claims) -> String {
+    pub fn gen_user_token(&self, user_id: i64) -> String {
+        self.gen_token(Claims {
+            sub: user_id,
+            exp: chrono::Utc::now().timestamp() + JWT_TTL,
+        })
+    }
+
+    pub fn gen_token(&self, claims: Claims) -> String {
         jsonwebtoken::encode(
             &Header::new(jsonwebtoken::Algorithm::HS256),
             &claims,

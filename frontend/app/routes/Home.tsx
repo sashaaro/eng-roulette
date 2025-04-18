@@ -15,10 +15,11 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         // TODO roomService.ws.close();
     }, [])
 
-
     const googleLogin = useCallback(async () => {
-        const link = await accountService.googleAuth()
-        open(link)
+
+        const resp = await accountService.googleAuth(window.location.origin)
+        localStorage.setItem("pkce_code_verifier", resp.pkce_code_verifier)
+        open(resp.authorize_url)
     }, []);
 
     return (

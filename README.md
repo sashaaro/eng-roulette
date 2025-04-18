@@ -45,8 +45,9 @@
 SECRET_KEY=$(openssl rand -hex 32)
 echo -e "\SECRET_KEY=${SECRET_KEY}" >> .env
 ```
-3. Создайте базу данные `CREATE DATABASE roulette;` и выполните `account/init.sql`
-4. Запустите контейнер postgres, запустите сервис `account` и `room`, а затем `frontend`:
+3. Добавьте переменные `OAUTH_GOOGLE_CLIENT_ID` и `OAUTH_GOOGLE_CLIENT_SECRET` в `.env`
+4. Создайте базу данные `CREATE DATABASE roulette;` и выполните `account/init.sql`
+5. Запустите контейнер postgres, запустите сервис `account` и `room`, а затем `frontend`:
 
 ```bash
 docker-compose up postgres
@@ -74,12 +75,11 @@ SERVER=example.com docker compose up -d
 Это поднимет сервисы traefik, proxy и tunnel, необходимые для туннеля и HTTPS.
 
 2. Локально:
-    - Запустите tunnel и frontend c env переменными
+    - в папке `frontend` выполните команду `cp .env.example .env`
+    - в `.env` добавьте `VITE_ACCOUNT_API=https://example.com/api/account` и `VITE_ROOM_API=https://example.com/api/room`
+    - Запустите tunnel и frontend
 ```bash
 make tunnel SERVER=example.com
-
-export VITE_ACCOUNT_API=https://example.com/api/account
-export VITE_ROOM_API=https://example.com/api/room
 npm run dev
 ```
 

@@ -2,6 +2,8 @@ use crate::domain::model::User;
 use crate::domain::repository::UserRepository;
 use crate::service::account::AppError::WrongPassword;
 use anyhow::Result;
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use std::sync::Arc;
 use thiserror;
 use thiserror::Error;
@@ -12,6 +14,14 @@ pub enum AppError {
     NotFound,
     #[error("wrong password")]
     WrongPassword,
+}
+
+fn generate_password() -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(6)
+        .map(char::from)
+        .collect()
 }
 
 pub struct AccountService {
@@ -25,6 +35,15 @@ impl AccountService {
 
     pub async fn create_user(&self, name: String, password: String) -> Result<User> {
         self.user_repo.create_user(name, password).await
+    }
+
+    pub async fn create_or_login(&self, email: String) -> Result<User> {
+        let user = self.user_repo.find_by_username(&email).await?;
+
+        match user {
+            Some(user) => Ok(user),
+            None => self.create_user(email, generate_password()).await,
+        }
     }
 
     pub async fn login(&self, name: String, password: String) -> Result<User> {

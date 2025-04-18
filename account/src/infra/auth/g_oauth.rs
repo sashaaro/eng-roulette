@@ -3,12 +3,12 @@ use oauth2::basic::{
     BasicTokenResponse,
 };
 use oauth2::{
-    AuthUrl, Client, ClientId, ClientSecret, EndpointNotSet, EndpointSet, RedirectUrl,
-    StandardRevocableToken, TokenUrl,
+    AuthUrl, Client, ClientId, ClientSecret, EndpointNotSet, EndpointSet, StandardRevocableToken,
+    TokenUrl,
 };
 use std::env;
 
-pub fn goauth2() -> Client<
+pub type GoogleClient = Client<
     BasicErrorResponse,
     BasicTokenResponse,
     BasicTokenIntrospectionResponse,
@@ -19,7 +19,9 @@ pub fn goauth2() -> Client<
     EndpointNotSet,
     EndpointNotSet,
     EndpointSet,
-> {
+>;
+
+pub fn create_google_oauth_client() -> GoogleClient {
     let auth_url = AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string())
         .expect("Invalid authorization endpoint URL");
     let token_url = TokenUrl::new("https://www.googleapis.com/oauth2/v3/token".to_string())
@@ -34,10 +36,8 @@ pub fn goauth2() -> Client<
             .expect("Missing the OAUTH_GOOGLE_CLIENT_SECRET environment variable."),
     );
 
-    let client = BasicClient::new(google_client_id)
+    BasicClient::new(google_client_id)
         .set_client_secret(google_client_secret)
         .set_auth_uri(auth_url)
-        .set_token_uri(token_url);
-
-    client
+        .set_token_uri(token_url)
 }
