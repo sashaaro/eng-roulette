@@ -12,12 +12,9 @@ sqlx = { version = "0.7", features = [ "runtime-tokio", "postgres", "chrono" ] }
 serde = { version = "1.0.194", features = ["derive"] }
 dotenvy = "0.15"
 jsonwebtoken = "9"
-uuid = { version = "1.10.0", features = ["v6", "rng", "serde"] }
-time = "0.3.36"
 chrono = { version = "0.4.31", features = ["clock", "serde"] }
 async-trait = "0.1.82"
 serde_json = "1.0.110"
-reqwest = { version = "0.12.1", features = ["json"] }
 tokio = { version = "1.40.0", features = ["full"] }
 anyhow = "1.0.97"
 thiserror = "1.0.69"
