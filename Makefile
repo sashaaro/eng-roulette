@@ -7,6 +7,5 @@ check:
 	cargo fmt --all -- --check
 
 test:
-	docker compose up -d
 	# TODO auto migrate db
-	cargo test --package account --bin account
+	cargo test -p account -p room

@@ -30,6 +30,7 @@ pub struct Participant {
     pub(crate) pc: RTCPeerConnection,
 }
 
+#[allow(clippy::type_complexity)]
 pub struct SFUInner {
     rooms: Mutex<HashMap<String, Arc<Mutex<HashMap<String, Arc<Participant>>>>>>,
     pub(crate) participants: Mutex<HashMap<String, Arc<Participant>>>,
@@ -40,7 +41,7 @@ pub struct SFUInner {
 }
 
 // Selective Forwarding unit
-pub struct SFU(Arc<SFUInner>);
+pub struct Sfu(Arc<SFUInner>);
 
 pub trait Signalling: Sync + Send {
     fn send_sdp(
@@ -55,9 +56,9 @@ pub trait Signalling: Sync + Send {
     ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + '_>>;
 }
 
-impl SFU {
+impl Sfu {
     pub fn new(signalling: Box<dyn Signalling>) -> Self {
-        SFU(Arc::new(SFUInner {
+        Sfu(Arc::new(SFUInner {
             signalling,
             participants: Default::default(),
             rooms: Default::default(),
@@ -67,20 +68,20 @@ impl SFU {
     }
 }
 
-impl Clone for SFU {
+impl Clone for Sfu {
     fn clone(&self) -> Self {
         Self(Arc::clone(&self.0))
     }
 }
 
-impl Deref for SFU {
+impl Deref for Sfu {
     type Target = SFUInner;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl SFU {
+impl Sfu {
     async fn get_or_create_peer(
         &self,
         session_id: String,
@@ -106,7 +107,7 @@ impl SFU {
         let pc = create_peer(session_id.clone()).await?;
         peer = Arc::new(Participant {
             session_id: session_id.clone(),
-            pc: pc,
+            pc,
         });
 
         room_map.insert(peer.session_id.clone(), Arc::clone(&peer));
@@ -151,14 +152,8 @@ impl SFU {
                 let room_id2 = room_id2.clone();
                 match s {
                     RTCPeerConnectionState::Closed | RTCPeerConnectionState::Failed => {
-                        match room.lock().await.remove(session_id.as_str()) {
-                            None => warn!(user:? = session_id.clone(), room:? = room_id2.clone(); "Not found session_id in room"),
-                            _ => {}
-                        }
-                        match this.participants.lock().await.remove(session_id.as_str()) {
-                            None => warn!(user:? = session_id.clone(), room:? = room_id2.clone(); "Not found session_id in room"),
-                            _ => {}
-                        }
+                        if room.lock().await.remove(session_id.as_str()).is_none() { warn!(user:? = session_id.clone(), room:? = room_id2.clone(); "Not found session_id in room") }
+                        if this.participants.lock().await.remove(session_id.as_str()).is_none() { warn!(user:? = session_id.clone(), room:? = room_id2.clone(); "Not found session_id in room") }
 
                         this.candidates_buffers.lock().await.remove(&session_id);
                         this.remote_tracks.lock().await.remove(&session_id);
@@ -293,7 +288,7 @@ impl SFU {
         let peer = self.get_or_create_peer(session_id.clone(), room_id).await?;
         peer.pc.set_remote_description(offer).await?;
 
-        let _ = match self.candidates_buffers.lock().await.get_mut(&session_id) {
+        match self.candidates_buffers.lock().await.get_mut(&session_id) {
             Some(candidates) => {
                 while let Some(candidate) = candidates.pop() {
                     peer.pc.add_ice_candidate(candidate).await?
@@ -343,17 +338,14 @@ impl SFU {
             Ok(_) => {
                 let mut candidates = self.candidates_buffers.lock().await;
                 let candidates = candidates.get_mut(&session_id);
-                match candidates {
-                    Some(candidates) => {
-                        while let Some(cand) = candidates.pop() {
-                            if let Err(e) = peer.pc.add_ice_candidate(cand.clone()).await {
-                                // Если ошибка - возвращаем кандидат обратно и прерываем цикл
-                                candidates.push(cand);
-                                return Err(e.into());
-                            }
+                if let Some(candidates) = candidates {
+                    while let Some(cand) = candidates.pop() {
+                        if let Err(e) = peer.pc.add_ice_candidate(cand.clone()).await {
+                            // Если ошибка - возвращаем кандидат обратно и прерываем цикл
+                            candidates.push(cand);
+                            return Err(e.into());
                         }
                     }
-                    _ => {}
                 }
 
                 Ok(())
@@ -364,7 +356,7 @@ impl SFU {
                         .lock()
                         .await
                         .entry(session_id)
-                        .or_insert_with(|| Vec::new())
+                        .or_insert_with(Vec::new)
                         .push(candidate);
                     Ok(())
                 }

@@ -47,8 +47,11 @@ jobs:
       - name: Wait for PostgreSQL
         run: sleep 5  # Даём время PostgreSQL запуститься
 
-      - name: Run account tests
+      - name: Run Clippy (Rust linter)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
         run: |
-          cargo test --package account --bin account
+          make test
         env:
           DATABASE_URL: "postgres://postgres:postgres@localhost:5432/test_db"

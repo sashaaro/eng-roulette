@@ -2,9 +2,7 @@ mod api;
 mod domain;
 mod infra;
 mod service;
-mod test;
 
-use crate::domain::repository::UserRepository;
 use actix_cors::Cors;
 use actix_web::{App, HttpServer};
 use api::app;

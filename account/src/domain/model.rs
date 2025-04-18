@@ -17,7 +17,7 @@ impl From<PgRow> for User {
     fn from(row: PgRow) -> Self {
         let id: i32 = row.get(0);
         User {
-            id: id.into(),
+            id,
             username: row.get("username"),
             password: row.get("password"),
             is_active: row.get("is_active"),

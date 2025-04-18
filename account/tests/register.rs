@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use crate::api::app::create_app;
-    use crate::api::routes::RegisterResponse;
-    use crate::infra::db;
+    use account::api::app::create_app;
+    use account::api::routes::RegisterResponse;
+    use account::infra::db;
     use actix_web::body::to_bytes;
     use actix_web::http::header::ContentType;
     use actix_web::{test, App};
@@ -51,6 +51,26 @@ mod tests {
         let b = std::str::from_utf8(&b).unwrap();
 
         let dto: RegisterResponse = serde_json::from_str(b).expect("Failed to parse json");
-        assert_eq!(true, dto.token.len() > 0);
+        assert!(!dto.token.is_empty());
+
+        let req = test::TestRequest::get()
+            .insert_header((
+                actix_web::http::header::AUTHORIZATION,
+                format!("Bearer {}", dto.token),
+            ))
+            .uri("/me")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status().as_u16(), 200);
+
+        let req = test::TestRequest::get()
+            .insert_header((
+                actix_web::http::header::AUTHORIZATION,
+                format!("Bearer {}", dto.token + "wrong"),
+            ))
+            .uri("/me")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status().as_u16(), 400);
     }
 }
