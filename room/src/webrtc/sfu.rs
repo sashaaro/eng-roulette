@@ -119,19 +119,15 @@ impl Sfu {
 
         let this = self.clone();
         let session_id = session_id.clone();
-        let this = this.clone();
         peer.pc.on_ice_candidate(Box::new(move |c: Option<RTCIceCandidate>| {
-                let this = this.clone();
-                let session_id = session_id.clone();
-                Box::pin(async move {
-                    match this.signalling.send_ice_candidate(session_id.clone(), c).await {
-                        Ok(_) => {},
-                        Err(e) => {
-                            warn!(err:? = e, user:? = session_id.clone(); "Could not send ice candidate");
-                        }
-                    }
-                })
-            }));
+            let this = this.clone();
+            let session_id = session_id.clone();
+            Box::pin(async move {
+                if let Err(e) = this.signalling.send_ice_candidate(session_id.clone(), c).await {
+                    warn!(err:? = e, user:? = session_id.clone(); "Could not send ice candidate");
+                }
+            })
+        }));
 
         let this = self.clone();
         let room2 = Arc::clone(&room);
