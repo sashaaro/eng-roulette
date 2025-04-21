@@ -33,16 +33,16 @@ impl AccountService {
         AccountService { user_repo }
     }
 
-    pub async fn create_user(&self, name: String, password: String) -> Result<User> {
+    pub async fn create_user(&self, name: &str, password: &str) -> Result<User> {
         self.user_repo.create_user(name, password).await
     }
 
-    pub async fn create_or_login(&self, email: String) -> Result<User> {
-        let user = self.user_repo.find_by_username(&email).await?;
+    pub async fn create_or_login(&self, email: &str) -> Result<User> {
+        let user = self.user_repo.find_by_username(email).await?;
 
         match user {
             Some(user) => Ok(user),
-            None => self.create_user(email, generate_password()).await,
+            None => self.create_user(email, &generate_password()).await,
         }
     }
 

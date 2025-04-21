@@ -2,7 +2,7 @@ use crate::domain::model::User;
 use crate::domain::repository;
 use async_trait::async_trait;
 use sqlx::Error::RowNotFound;
-use sqlx::{Pool, Postgres, Row};
+use sqlx::{Pool, Postgres};
 
 #[derive(Clone)]
 pub struct PgUserRepository {
@@ -17,21 +17,15 @@ impl PgUserRepository {
 
 #[async_trait]
 impl repository::UserRepository for PgUserRepository {
-    async fn create_user(&self, username: String, password: String) -> anyhow::Result<User> {
+    async fn create_user(&self, username: &str, password: &str) -> anyhow::Result<User> {
         let result =
-            sqlx::query("INSERT INTO users(username, password) VALUES ($1, $2) RETURNING id;")
-                .bind(&username)
-                .bind(&password)
+            sqlx::query("INSERT INTO users(username, password) VALUES ($1, $2) RETURNING *")
+                .bind(username)
+                .bind(password)
                 .fetch_one(&self.pool)
                 .await?;
 
-        Ok(User {
-            id: result.get("id"),
-            is_active: true,
-            username,
-            password,
-            premium_until: None,
-        })
+        Ok(result.into())
     }
 
     async fn find(&self, id: i64) -> anyhow::Result<Option<User>> {

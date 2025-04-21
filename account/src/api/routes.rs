@@ -34,7 +34,10 @@ async fn register(
         }
     };
 
-    let user = match account_service.create_user(body.name, body.password).await {
+    let user = match account_service
+        .create_user(&body.name, &body.password)
+        .await
+    {
         Ok(user) => user,
         Err(err) => return HttpResponse::NotFound().body(format!("err: {:?}", err)),
     };
@@ -191,7 +194,7 @@ async fn google_auth_callback(
         AppError(anyhow!(err))
     })?;
 
-    let user = account_service.create_or_login(user_info.email).await?;
+    let user = account_service.create_or_login(&user_info.email).await?;
 
     Ok(HttpResponse::Ok().json(&RegisterResponse {
         token: jwt_manager.gen_user_token(user.id as _),
