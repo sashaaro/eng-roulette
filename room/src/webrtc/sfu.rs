@@ -418,9 +418,6 @@ impl Sfu {
                 .collect::<Vec<_>>()
         };
 
-        // 2. Обрабатываем каждого участника асинхронно
-        let mut join_handles = Vec::new();
-
         let mut remote_tracks = self.remote_tracks.lock().await;
 
         let tracks = participants
@@ -441,10 +438,10 @@ impl Sfu {
 
             match track {
                 Some(track) => {
-                    join_handles.push(tokio::spawn(async move {
-                        // 4. Отправляем трек новому участнику
+                    tokio::spawn(async move {
+                        // работает до тех пор, пока удается взять weak pointer от track
                         this.send_track_to_participant(track, new_peer).await;
-                    }));
+                    });
                 }
                 None => {
                     remote_tracks.remove(&session_id);
