@@ -2,7 +2,7 @@
 #[allow(clippy::module_inception)]
 mod tests {
     use crate::domain::repository::MockUserRepository;
-    use crate::service::account::{AccountService, AccountError};
+    use crate::service::account::{AccountError, AccountService};
     use anyhow::Result;
     use mockall::predicate::eq;
     use std::sync::Arc;

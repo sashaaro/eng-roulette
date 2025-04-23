@@ -30,10 +30,12 @@ mod tests {
             test::init_service(App::new().configure(create_app(pool.clone(), SECRET_KEY))).await;
 
         pool.execute("truncate users cascade").await.unwrap();
-
+        let body = |user, pwd: &str| -> String {
+            format!(r#"{{"name": "{}", "password": "{}"}}"#, user, pwd)
+        };
         let req = test::TestRequest::post()
             .insert_header(ContentType::json())
-            .set_payload("{\"name\": \"alex\", \"password\": \"123\"}")
+            .set_payload(body("alex", "123"))
             .uri("/register")
             .to_request();
         let resp = test::call_service(&app, req).await;
@@ -41,7 +43,31 @@ mod tests {
 
         let req = test::TestRequest::post()
             .insert_header(ContentType::json())
-            .set_payload("{\"name\": \"alex\", \"password\": \"123\"}")
+            .set_payload(body("alex", "wrong password"))
+            .uri("/login")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status().as_u16(), 400);
+        assert_eq!(
+            std::str::from_utf8(&to_bytes(resp.into_body()).await.unwrap()).unwrap(),
+            "wrong password"
+        );
+
+        let req = test::TestRequest::post()
+            .insert_header(ContentType::json())
+            .set_payload(body("noexistuser", "wrong password"))
+            .uri("/login")
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status().as_u16(), 400);
+        assert_eq!(
+            std::str::from_utf8(&to_bytes(resp.into_body()).await.unwrap()).unwrap(),
+            "user not found"
+        );
+
+        let req = test::TestRequest::post()
+            .insert_header(ContentType::json())
+            .set_payload(body("alex", "123"))
             .uri("/login")
             .to_request();
         let resp = test::call_service(&app, req).await;

@@ -1,6 +1,6 @@
 use crate::infra::auth::g_oauth::create_google_oauth_client;
 use crate::infra::auth::jwt::JwtManager;
-use crate::service::account::AccountService;
+use crate::service::account::{AccountError, AccountService};
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder, ResponseError};
 use anyhow::anyhow;
 use oauth2::{
@@ -65,8 +65,15 @@ async fn login(
     let user = match user {
         Ok(user) => user,
         Err(err) => {
-            log::info!(username:? = body.name; "Failed login attempt");
-            return HttpResponse::NotFound().body(format!("err: {:?}", err));
+            return err.downcast_ref::<AccountError>().map_or_else(
+                || HttpResponse::InternalServerError().body(format!("err: {:?}", err)),
+                |e| match *e {
+                    AccountError::UserNotFound => HttpResponse::BadRequest().body("user not found"),
+                    AccountError::WrongPassword => {
+                        HttpResponse::BadRequest().body("wrong password")
+                    }
+                },
+            )
         }
     };
 
