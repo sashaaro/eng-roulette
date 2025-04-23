@@ -2,7 +2,7 @@
 #[allow(clippy::module_inception)]
 mod tests {
     use crate::domain::repository::MockUserRepository;
-    use crate::service::account::AccountService;
+    use crate::service::account::{AccountService, AccountError};
     use anyhow::Result;
     use mockall::predicate::eq;
     use std::sync::Arc;
@@ -34,7 +34,10 @@ mod tests {
         let logged_user = account_service
             .login("alex".to_string(), "wrong password".to_string())
             .await;
-        assert!(logged_user.is_err());
+        assert!(&logged_user.is_err());
+
+        let app_err = logged_user.unwrap_err().downcast::<AccountError>()?;
+        assert_eq!(app_err, AccountError::WrongPassword);
 
         Ok(())
     }

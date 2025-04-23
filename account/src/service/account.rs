@@ -1,6 +1,5 @@
 use crate::domain::model::User;
 use crate::domain::repository::UserRepository;
-use crate::service::account::AppError::WrongPassword;
 use anyhow::Result;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
@@ -8,10 +7,10 @@ use std::sync::Arc;
 use thiserror;
 use thiserror::Error;
 
-#[derive(Debug, Error)]
-pub enum AppError {
-    #[error("not found")]
-    NotFound,
+#[derive(Debug, Error, PartialEq)]
+pub enum AccountError {
+    #[error("user not found")]
+    UserNotFound,
     #[error("wrong password")]
     WrongPassword,
 }
@@ -53,10 +52,10 @@ impl AccountService {
                 if user.is_active && password == user.password {
                     Ok(user)
                 } else {
-                    Err(WrongPassword.into())
+                    Err(AccountError::WrongPassword.into())
                 }
             }
-            None => Err(AppError::NotFound.into()),
+            None => Err(AccountError::UserNotFound.into()),
         }
     }
 
@@ -65,6 +64,6 @@ impl AccountService {
             .find(id)
             .await?
             .filter(|u| u.is_active)
-            .ok_or_else(|| AppError::NotFound.into())
+            .ok_or_else(|| AccountError::UserNotFound.into())
     }
 }
