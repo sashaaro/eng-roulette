@@ -160,8 +160,8 @@ impl Sfu {
                     _ => {}
                 }
 
-                let peers = this.participants.lock().await.iter()
-                    .map(|(_, p)| p.session_id.clone()).collect::<Vec<String>>();
+                let peers = this.participants.lock().await.values()
+                    .map(|p| p.session_id.clone()).collect::<Vec<String>>();
                 info!(
                         user:? = session_id,
                         room:? = room_id2.clone(),

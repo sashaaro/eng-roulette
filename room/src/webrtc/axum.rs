@@ -77,10 +77,7 @@ impl Signalling for WebsocketSignalling {
         Box::pin(async move {
             let sessions = self.sessions.lock().await;
             let session = sessions.get(&session_id);
-            if session.is_none() {
-                Err(SfuError::SessionNotFound.into())
-            } else {
-                let session = session.unwrap();
+            if let Some(session) = session {
                 let playground = serde_json::to_string(&SignalingResponse::Sdp(Box::new(sdp)))?;
                 session
                     .0
@@ -89,6 +86,8 @@ impl Signalling for WebsocketSignalling {
                     .send(Message::from(playground))
                     .await?;
                 Ok(())
+            } else {
+                Err(SfuError::SessionNotFound.into())
             }
         })
     }
@@ -101,10 +100,7 @@ impl Signalling for WebsocketSignalling {
         Box::pin(async move {
             let sessions = self.sessions.lock().await;
             let session = sessions.get(&session_id);
-            if session.is_none() {
-                Err(SfuError::SessionNotFound.into())
-            } else {
-                let session = session.unwrap();
+            if let Some(session) = session {
                 let playground = serde_json::to_string(&SignalingResponse::Candidate(candidate))?;
                 session
                     .0
@@ -113,6 +109,8 @@ impl Signalling for WebsocketSignalling {
                     .send(Message::from(playground))
                     .await?;
                 Ok(())
+            } else {
+                Err(SfuError::SessionNotFound.into())
             }
         })
     }
