@@ -3,15 +3,35 @@ import type {User} from "~/context/session";
 import { EventEmitter } from 'eventemitter3'
 import config from "~/service/config";
 
-
-function callbackToPromise(): any {
-    let callback: any;
-    const promise = new Promise((resolve, reject) => {
-        callback= resolve;
-    })
-
-    return {promise, callback}
+interface WebSocketMessage {
+    type: 'sdp' | 'candidate';
+    playground?: RTCSessionDescriptionInit | RTCIceCandidateInit;
 }
+
+interface PromiseWithCallback<T = void> {
+    promise: Promise<T>;
+    callback: (value: T) => void;
+}
+
+function createPromiseWithCallback<T = void>(): PromiseWithCallback<T> {
+    let callback: (value: T) => void;
+    const promise = new Promise<T>((resolve) => {
+        callback = resolve;
+    });
+
+    return { promise, callback: callback! };
+}
+
+const ICE_SERVERS = [
+    {
+        urls: ['stun:stun.l.google.com:19302', 'stun:stun.l.google.com:5349', 'stun:stun1.l.google.com:3478']
+    }
+];
+
+const MEDIA_CONSTRAINTS = {
+    video: true,
+    audio: false
+};
 
 export interface WebrtcSession {
     pc: RTCPeerConnection
@@ -35,18 +55,27 @@ export class RoomService {
     }
 
     private async createWS(token: string): Promise<WebSocket> {
-        if (!this.ws) {
-            this.ws = new WebSocket(config.roomWS + "/ws?jwt=" + token)
-            const {callback, promise } = callbackToPromise()
-            this.ws.addEventListener("open", callback);
-            await promise;
+        if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+            const wsUrl = `${config.roomWS}/ws?jwt=${token}`;
+            this.ws = new WebSocket(wsUrl);
 
-            this.ws!.addEventListener("close", () => {
+            const { callback, promise } = createPromiseWithCallback<Event>();
+            this.ws.addEventListener("open", callback);
+
+            this.ws.addEventListener("error", (error) => {
+                console.error("WebSocket error:", error);
                 this.ws = undefined;
-            })
+            });
+
+            this.ws.addEventListener("close", (event) => {
+                console.log("WebSocket closed:", event.code, event.reason);
+                this.ws = undefined;
+            });
+
+            await promise;
         }
 
-        return this.ws
+        return this.ws;
     }
 
 
@@ -79,127 +108,232 @@ export class RoomService {
         })
 
         this.ws!.addEventListener("message", async (event) => {
-            const d = JSON.parse(event.data)
-            switch (d.type) {
-                case "sdp": {
-                    const sdp: RTCSessionDescription = d.playground
-                    // 0. Проверка состояния
-                    // console.log(this.pc!.signalingState)
-                    // if (this.pc!.signalingState !== "stable") {
-                    //     await this.pc!.setLocalDescription({ type: "rollback" });
-                    // }
-
-                    await this.pc!.setRemoteDescription(sdp);
-                    emitter.emit("onRemoteDescriptionChanged", sdp);
-
-                    const answer = await this.pc!.createAnswer()
-                    await this.sendAnswer(user, answer, room)
-                    await this.pc!.setLocalDescription(answer);
-                    break
-                }
-                case "candidate": {
-                    if (d.playground) {
-                        if (this.pc!.remoteDescription) {
-                            await this.pc!.addIceCandidate(d.playground);
-                        } else {
-                            pendingCandidates.push(d.playground);
-                        }
-                    }
-                    break
-                }
+            try {
+                const message: WebSocketMessage = JSON.parse(event.data);
+                await this.handleWebSocketMessage(message, user, room, emitter, pendingCandidates);
+            } catch (error) {
+                console.error("Error handling WebSocket message:", error);
             }
-        })
+        });
 
-        let stream: MediaStream;
         if (!this.pc) {
-            this.pc = new RTCPeerConnection({
-                iceServers: [
-                    {
-                        urls: ['stun:stun.l.google.com:19302', 'stun:stun.l.google.com:5349', 'stun:stun1.l.google.com:3478']
-                    }
-                ]
-            });
-
-            this.pc!.addEventListener("connectionstatechange", (e) => {
-                if (["closed", "failed"].includes(this.pc!.connectionState)) {
-                    this.pc = undefined;
-                    emitter.emit("closed", e)
-                }
-            })
-
-            this.pc!.onicecandidate = async (event) => {
-                if (!event.candidate || this.pc!.iceConnectionState === "connected") {
-                    return
-                }
-                await this.candidate(event.candidate, user, room);
-            }
-
-            this.pc!.onnegotiationneeded = async (e) => {
-                console.log('negotiationneeded', e)
-                await this.renegotiation(false, room, user);
-            }
-
-            window.addEventListener("beforeunload", () => {
-                console.log("closing ps & ws")
-                this.pc?.close();
-                this.ws?.close()
-            })
-
-            const stream = await navigator.mediaDevices.getUserMedia({video: true, audio: false})
-            stream.getTracks().forEach(track => this.pc!.addTrack(track, stream));
-
-            this.stream = stream;
+            await this.initializePeerConnection(user, room, emitter);
         } else {
             await this.renegotiation(true, room, user);
         }
 
-        // pc.addTransceiver('video')
-
-
-        return {pc: this.pc!, localStream: this.stream!, emitter: emitter}
+        return { pc: this.pc!, localStream: this.stream!, emitter };
     }
 
-    private async candidate(candidate: RTCIceCandidate, user: User, room: string) {
-        const resp = await this.axiosClient.post<{answer: RTCSessionDescription}>("/candidate", {candidate, room_id: room}, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${user.token}`,
-            }
-        });
-        return resp.data.answer
-    }
-
-    private async sendAnswer(user: User, answer: RTCSessionDescriptionInit, room_id: string) {
-        const resp = await this.axiosClient.post<{answer: RTCSessionDescription}>("/answer", {answer, room_id: room_id}, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${user.token}`,
-            }
-        });
-        return resp.data.answer
-    }
-
-
-    private async createOffer(iceRestart: boolean, room_id: string, user: User) {
-        const offer = await this.pc?.createOffer({iceRestart})
+    private async candidate(candidate: RTCIceCandidate, user: User, room: string): Promise<RTCSessionDescription> {
         try {
-            await this.pc?.setLocalDescription(offer)
+            const resp = await this.axiosClient.post<{answer: RTCSessionDescription}>("/candidate", {
+                candidate,
+                room_id: room
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`,
+                }
+            });
+            return resp.data.answer;
         } catch (error) {
-            console.error(error)
-            return
+            console.error("Error sending candidate:", error);
+            throw error;
         }
-        const resp = await this.axiosClient.post<{answer: RTCSessionDescription}>("/offer", {offer, room_id}, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${user.token}`,
-            }
-        });
-        await this.pc?.setRemoteDescription(resp.data.answer)
-        return resp.data.answer
+    }
+
+    private async sendAnswer(user: User, answer: RTCSessionDescriptionInit, room_id: string): Promise<RTCSessionDescription> {
+        try {
+            const resp = await this.axiosClient.post<{answer: RTCSessionDescription}>("/answer", {
+                answer,
+                room_id
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`,
+                }
+            });
+            return resp.data.answer;
+        } catch (error) {
+            console.error("Error sending answer:", error);
+            throw error;
+        }
+    }
+
+
+    private async createOffer(iceRestart: boolean, room_id: string, user: User): Promise<RTCSessionDescription | undefined> {
+        if (!this.pc) {
+            console.error("Peer connection not initialized");
+            return;
+        }
+
+        try {
+            const offer = await this.pc.createOffer({ iceRestart });
+            await this.pc.setLocalDescription(offer);
+
+            const resp = await this.axiosClient.post<{answer: RTCSessionDescription}>("/offer", {
+                offer,
+                room_id
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${user.token}`,
+                }
+            });
+
+            await this.pc.setRemoteDescription(resp.data.answer);
+            return resp.data.answer;
+        } catch (error) {
+            console.error("Error creating offer:", error);
+            throw error;
+        }
     }
 
     private async renegotiation(iceRestart: boolean, room: string, user: User) {
         await this.createOffer(iceRestart, room, user);
+    }
+
+    private async initializePeerConnection(user: User, room: string, emitter: EventEmitter): Promise<void> {
+        try {
+            this.pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+            this.setupPeerConnectionEventHandlers(user, room, emitter);
+            await this.setupMediaStream();
+
+            this.setupWindowUnloadHandler();
+        } catch (error) {
+            console.error("Error initializing peer connection:", error);
+            throw error;
+        }
+    }
+
+    private setupPeerConnectionEventHandlers(user: User, room: string, emitter: EventEmitter): void {
+        if (!this.pc) return;
+
+        this.pc.addEventListener("connectionstatechange", (event) => {
+            if (!this.pc) return;
+
+            console.log("Connection state changed:", this.pc.connectionState);
+            if (["closed", "failed"].includes(this.pc.connectionState)) {
+                this.pc = undefined;
+                emitter.emit("closed", event);
+            }
+        });
+
+        this.pc.onicecandidate = async (event) => {
+            if (!event.candidate || !this.pc || this.pc.iceConnectionState === "connected") {
+                return;
+            }
+
+            try {
+                await this.candidate(event.candidate, user, room);
+            } catch (error) {
+                console.error("Error sending ICE candidate:", error);
+            }
+        };
+
+        this.pc.onnegotiationneeded = async () => {
+            try {
+                await this.renegotiation(false, room, user);
+            } catch (error) {
+                console.error("Error during renegotiation:", error);
+            }
+        };
+    }
+
+    private async setupMediaStream(): Promise<void> {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia(MEDIA_CONSTRAINTS);
+            stream.getTracks().forEach(track => {
+                if (this.pc) {
+                    this.pc.addTrack(track, stream);
+                }
+            });
+            this.stream = stream;
+        } catch (error) {
+            console.error("Error accessing media devices:", error);
+            throw error;
+        }
+    }
+
+    private setupWindowUnloadHandler(): void {
+        window.addEventListener("beforeunload", () => {
+            console.log("Closing peer connection and WebSocket");
+            this.pc?.close();
+            this.ws?.close();
+        });
+    }
+
+    private async handleWebSocketMessage(
+        message: WebSocketMessage,
+        user: User,
+        room: string,
+        emitter: EventEmitter,
+        pendingCandidates: RTCIceCandidateInit[]
+    ): Promise<void> {
+        if (!this.pc) {
+            console.error("Peer connection not initialized");
+            return;
+        }
+
+        switch (message.type) {
+            case "sdp":
+                await this.handleSdpMessage(message.playground as RTCSessionDescriptionInit, user, room, emitter);
+                break;
+            case "candidate":
+                await this.handleCandidateMessage(message.playground as RTCIceCandidateInit, pendingCandidates);
+                break;
+            default:
+                console.warn("Unknown message type:", message.type);
+        }
+    }
+
+    private async handleSdpMessage(
+        sdp: RTCSessionDescriptionInit,
+        user: User,
+        room: string,
+        emitter: EventEmitter
+    ): Promise<void> {
+        if (!this.pc || !sdp) {
+            console.error("Invalid SDP message or peer connection not initialized");
+            return;
+        }
+
+        try {
+            await this.pc.setRemoteDescription(sdp);
+            emitter.emit("onRemoteDescriptionChanged", sdp);
+
+            const answer = await this.pc.createAnswer();
+            await this.sendAnswer(user, answer, room);
+            await this.pc.setLocalDescription(answer);
+        } catch (error) {
+            console.error("Error handling SDP message:", error);
+        }
+    }
+
+    private async handleCandidateMessage(
+        candidate: RTCIceCandidateInit,
+        pendingCandidates: RTCIceCandidateInit[]
+    ): Promise<void> {
+        if (!candidate) {
+            return;
+        }
+
+        if (!this.pc) {
+            console.error("Peer connection not initialized");
+            return;
+        }
+
+        try {
+            if (this.pc.remoteDescription) {
+                await this.pc.addIceCandidate(candidate);
+            } else {
+                pendingCandidates.push(candidate);
+            }
+        } catch (error) {
+            console.error("Error handling ICE candidate:", error);
+        }
     }
 }
 
