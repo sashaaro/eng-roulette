@@ -17,6 +17,7 @@ use webrtc::interceptor::registry::Registry;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
+use webrtc::peer_connection::signaling_state::RTCSignalingState;
 use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use webrtc::track::track_local::track_local_static_rtp::TrackLocalStaticRTP;
@@ -28,6 +29,8 @@ use webrtc::Error::ErrNoRemoteDescription;
 pub struct Participant {
     pub(crate) session_id: String,
     pub(crate) pc: RTCPeerConnection,
+    pub(crate) negotiating: Mutex<bool>,
+    pub(crate) pending_negotiation: Mutex<bool>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -108,6 +111,8 @@ impl Sfu {
         peer = Arc::new(Participant {
             session_id: session_id.clone(),
             pc,
+            negotiating: Mutex::new(false),
+            pending_negotiation: Mutex::new(false),
         });
 
         room_map.insert(peer.session_id.clone(), Arc::clone(&peer));
@@ -192,6 +197,49 @@ impl Sfu {
     }
 
     async fn on_negotiation_needed(&self, peer: Arc<Participant>) -> Result<()> {
+        // Check if already negotiating
+        {
+            let mut negotiating = peer.negotiating.lock().await;
+            if *negotiating {
+                // Mark that another negotiation is pending
+                *peer.pending_negotiation.lock().await = true;
+                return Ok(());
+            }
+            *negotiating = true;
+        }
+
+        // Perform negotiation
+        let result = self.do_negotiation(&peer).await;
+
+        // Check if there's a pending negotiation to handle
+        loop {
+            let has_pending = {
+                let mut pending = peer.pending_negotiation.lock().await;
+                if *pending {
+                    *pending = false;
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if !has_pending {
+                break;
+            }
+
+            // Handle pending negotiation
+            if let Err(e) = self.do_negotiation(&peer).await {
+                error!(user:? = peer.session_id, err:? = e; "Failed pending negotiation");
+            }
+        }
+
+        // Release negotiation lock
+        *peer.negotiating.lock().await = false;
+
+        result
+    }
+
+    async fn do_negotiation(&self, peer: &Arc<Participant>) -> Result<()> {
         let sdp = peer.pc.create_offer(None).await?;
         peer.pc.set_local_description(sdp.clone()).await?;
 
@@ -318,7 +366,27 @@ impl Sfu {
             bail!("No peer found for this session")
         };
 
-        peer.pc.set_remote_description(answer).await?;
+        // Check signaling state before applying remote description
+        let signaling_state = peer.pc.signaling_state();
+
+        // Only apply answer if we're in the correct state (have-local-offer)
+        match signaling_state {
+            RTCSignalingState::HaveLocalOffer => {
+                // We have a local offer, so we can accept a remote answer
+                peer.pc.set_remote_description(answer).await?;
+            },
+            RTCSignalingState::Stable => {
+                // Already stable - this answer might be stale or duplicate
+                warn!(user:? = session_id, state:? = signaling_state; "Ignoring answer - peer connection already stable");
+                return Ok(());
+            },
+            _ => {
+                // Other states - this answer might be stale
+                warn!(user:? = session_id, state:? = signaling_state; "Ignoring answer - peer connection not in have-local-offer state");
+                return Ok(());
+            }
+        }
+
         Ok(())
     }
 
