@@ -56,29 +56,27 @@ npm run dev # запускаем сервис react spa
 Frontend будет доступен на http://localhost:5173
 
 > ⚠️ Важно: Для корректной работы видеосвязи в браузере может потребоваться HTTPS. Браузеры (Chrome, Firefox и др.) могут блокировать доступ к камере и микрофону на сайтах без HTTPS.
-В scripts/compose.yaml уже включены сервисы traefik, proxy и tunnel, чтобы можно было запускать dev-проект на сервере с поддержкой HTTPS через скрипт tunnel.sh.
 
 ## Запуск через туннель с HTTPS через публичный сервер
 
-Для организации HTTPS-соединения и публичного доступа к dev-проекту можно использовать связку `make tunnel` + публичный traefik сервер:
+Для организации HTTPS-соединения и публичного доступа к dev-проекту можно использовать связку `make tunnel` + публичный Caddy сервер:
 
-1. На сервере `example.com`:
-    - Скопируйте содержимое директории scripts/ и файл compose.yaml на публичный сервер. 
-    - Измените `domains` и `email` в `traefik.yml`, поменяйте адрес `botenza.org` по умолчанию на свой
-    - Выполните команду:
-
-```bash
-SERVER=example.com docker compose up -d
+Добавьте на сервере `example.com` в `Caddyfile`
+```caddyfile
+webrtc.example.com {
+    reverse_proxy localhost:8083
+}
 ```
-Это поднимет сервисы traefik, proxy и tunnel, необходимые для туннеля и HTTPS.
+На сервере `example.com` запустите туннель:
 
-2. Локально:
-    - в папке `frontend` выполните команду `cp .env.example .env`
-    - в `.env` добавьте `VITE_ACCOUNT_API=https://example.com/api/account` и `VITE_ROOM_API=https://example.com/api/room`
-    - Запустите tunnel и frontend
 ```bash
+docker compose up tunnel
+```
+
+С работающими сервисами еще локально запустите api gateway `caddy` и `tunnel`
+```bash
+docker compose up caddy
 make SERVER=example.com tunnel
-npm run dev
 ```
 
 Этот скрипт установит безопасный туннель между локальным окружением и сервером.
