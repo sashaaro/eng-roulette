@@ -3,29 +3,3 @@ services:
     image: jpillora/chisel:latest
     network_mode: host
     command: "server -p 8080 --reverse"
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.rl-rm.service=rl-rm
-      - traefik.http.routers.rl-acc.service=rl-acc
-      - traefik.http.routers.rl-front.service=rl-front
-      - traefik.http.services.rl-rm.loadbalancer.server.port=8082
-      - traefik.http.services.rl-acc.loadbalancer.server.port=8081
-      - traefik.http.services.rl-front.loadbalancer.server.port=8057
-
-  # reverse proxy
-  proxy:
-    image: traefik:v3.3
-    network_mode: host
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - "./traefik.yml:/etc/traefik/traefik.yml"
-      - "./http.yml:/etc/traefik/http.yml"
-      - "./acme:/acme"
-    environment:
-      - SERVER=${SERVER:-roulette.botenza.org}
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.api.rule=Host(`${DASHBOARD_SERVER:-traefik.botenza.org}`)
-      - traefik.http.routers.api.service=api@internal
-      - traefik.http.services.api.loadbalancer.server.port=8080
-      - traefik.http.routers.api.tls=true

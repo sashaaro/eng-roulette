@@ -1,14 +1,15 @@
 :8083 {
     handle {
+        # frontend
         reverse_proxy localhost:5173
     }
 
-    # API /account
+    # API account
     handle_path /api/account* {
         reverse_proxy localhost:8081
     }
 
-    # API /room
+    # API room
     handle_path /api/room* {
         reverse_proxy localhost:8082
     }
