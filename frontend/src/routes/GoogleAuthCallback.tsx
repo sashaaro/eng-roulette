@@ -1,12 +1,9 @@
-import type { Route } from "./+types/home";
-import {SessionContext, useAuth} from "~/context/session";
-import {useContext, useEffect} from "react";
-import {accountService} from "~/service/account";
+import {useAuth} from "./../context/session.tsx";
+import {useEffect} from "react";
+import {accountService} from "./../service/account.ts";
 import {useNavigate, useSearchParams} from "react-router";
 
-export default function GoogleAuthCallback({ loaderData }: Route.ComponentProps) {
-    const session = useContext(SessionContext);
-
+export default function GoogleAuthCallback() {
     const [searchParams, _] = useSearchParams();
     const {user, setUser} = useAuth();
     let navigate = useNavigate();

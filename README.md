@@ -41,11 +41,11 @@
 2. Сгенерируйте и добавьте env `SECRET_KEY` для JWT-токенов с помощью команды:
 ```bash
 SECRET_KEY=$(openssl rand -hex 32)
-echo -e "\SECRET_KEY=${SECRET_KEY}" >> .env
+echo -e "SECRET_KEY=${SECRET_KEY}" >> .env
 ```
 3. Добавьте переменные `OAUTH_GOOGLE_CLIENT_ID` и `OAUTH_GOOGLE_CLIENT_SECRET` в `.env`
-4. Создайте базу данные `CREATE DATABASE roulette;` и выполните `account/init.sql`
-5. Запустите контейнер postgres, запустите сервис `account` и `room`, а затем `frontend`:
+4. 
+4. Запустите контейнер `postgres`, выполните `account/init.sql`, запустите сервис `account` и `room`, а затем `frontend`:
 
 ```bash
 docker-compose up postgres
@@ -53,7 +53,7 @@ cargo run --bin account # запускаем сервис account
 cargo run --bin room # запускаем сервис room
 npm run dev # запускаем сервис react spa
 ```
-Frontend будет доступен на http://localhost:5157
+Frontend будет доступен на http://localhost:5173
 
 > ⚠️ Важно: Для корректной работы видеосвязи в браузере может потребоваться HTTPS. Браузеры (Chrome, Firefox и др.) могут блокировать доступ к камере и микрофону на сайтах без HTTPS.
 В scripts/compose.yaml уже включены сервисы traefik, proxy и tunnel, чтобы можно было запускать dev-проект на сервере с поддержкой HTTPS через скрипт tunnel.sh.
@@ -77,7 +77,7 @@ SERVER=example.com docker compose up -d
     - в `.env` добавьте `VITE_ACCOUNT_API=https://example.com/api/account` и `VITE_ROOM_API=https://example.com/api/room`
     - Запустите tunnel и frontend
 ```bash
-make tunnel SERVER=example.com
+make SERVER=example.com tunnel
 npm run dev
 ```
 

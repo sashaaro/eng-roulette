@@ -1,7 +1,7 @@
 import axios, {type AxiosInstance} from "axios";
-import type {User} from "~/context/session";
+import type {User} from "./../context/session.tsx";
 import { EventEmitter } from 'eventemitter3'
-import config from "~/service/config";
+import config from "./config.ts";
 
 interface WebSocketMessage {
     type: 'sdp' | 'candidate';

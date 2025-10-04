@@ -2847,6 +2847,7 @@ dependencies = [
  "anyhow",
  "axum",
  "clap",
+ "dotenvy",
  "env_logger",
  "futures",
  "http 1.1.0",

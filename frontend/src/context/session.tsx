@@ -1,5 +1,5 @@
-import {type ContextType, createContext, type ReactNode, useContext, useEffect, useState} from "react";
-import {accountService} from "~/service/account";
+import {createContext, type ReactNode, useContext, useEffect, useState} from "react";
+import {accountService} from "./../service/account.ts";
 
 export interface User {
     id: number;

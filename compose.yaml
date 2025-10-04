@@ -1,14 +1,20 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     command: "-c max_prepared_transactions=10"
     ports:
       - 5432:5432
     environment:
-      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=roulette
+      - POSTGRES_PASSWORD=postgres
     volumes:
       - postgres_data:/var/lib/postgresql
 
+  caddy:
+    image: caddy:latest
+    network_mode: host
+    volumes:
+      - ./scripts:/etc/caddy
 
 
 volumes:

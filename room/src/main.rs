@@ -13,8 +13,11 @@ pub struct Args {
     pub port: u16,
 }
 
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    dotenvy::dotenv()?;
+
     Builder::new()
         .filter(None, LevelFilter::Info)
         .filter(Some("webrtc::peer_connection"), LevelFilter::Warn)

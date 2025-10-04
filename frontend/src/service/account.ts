@@ -1,5 +1,5 @@
 import axios, {type AxiosInstance} from 'axios';
-import config from "~/service/config";
+import config from "./config.ts";
 
 interface TokenResponse {
     token: string;

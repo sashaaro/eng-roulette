@@ -1,6 +1,6 @@
 const config = {
-    accountURL: import.meta.env.VITE_ACCOUNT_API || "http://localhost:8081",
-    roomURL: import.meta.env.VITE_ROOM_API || "http://localhost:8082",
+    accountURL: import.meta.env.VITE_ACCOUNT_API || location.origin + "/api/account",
+    roomURL: import.meta.env.VITE_ROOM_API || location.origin + "/api/room",
     roomWS: ""
 }
 

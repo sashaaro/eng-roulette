@@ -1,8 +1,8 @@
 import {useForm} from "react-hook-form";
-import {useCallback, useEffect, useState} from "react";
-import {roomService, type WebrtcSession} from "~/service/room";
-import {useAuth} from "~/context/session";
-import VideoSrc from "~/component/VideoSrc";
+import {useCallback, useState} from "react";
+import {roomService, type WebrtcSession} from "./../service/room.ts";
+import {useAuth} from "./../context/session.tsx";
+import VideoSrc from "./../component/VideoSrc.tsx";
 
 type Inputs = {
     room_name: string;
@@ -12,9 +12,6 @@ export function JoinRoom({}) {
     const {
         register,
         handleSubmit,
-        watch,
-        formState: { errors },
-        setValue
     } = useForm<Inputs>({defaultValues: {room_name: "default"}});
 
     const [tracks, setTracks] = useState<Array<RTCTrackEvent>>([])

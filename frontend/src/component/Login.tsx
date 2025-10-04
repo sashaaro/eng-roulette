@@ -1,8 +1,8 @@
-import {type FunctionComponent, useCallback, useContext} from "react";
-import {accountService} from "~/service/account";
-import {SessionContext, useAuth} from "~/context/session";
+import {accountService} from "./../service/account.ts";
+import {SessionContext, useAuth} from "./../context/session.tsx";
 import { useForm } from "react-hook-form"
 import {useNavigate} from "react-router";
+import {useContext} from "react";
 
 type Inputs = {
     username: string

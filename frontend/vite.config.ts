@@ -1,24 +1,7 @@
-import { reactRouter } from "@react-router/dev/vite";
-import { defineConfig } from "vite";
-import tsconfigPaths from "vite-tsconfig-paths";
-import * as path from "node:path";
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 
+// https://vite.dev/config/
 export default defineConfig({
-  css: {
-    postcss: {
-      plugins: [],
-    },
-  },
-  resolve: {
-    alias: {
-      '~bootstrap': path.resolve(__dirname, 'node_modules/bootstrap'),
-    }
-  },
-  plugins: [reactRouter(), tsconfigPaths()],
-  server: {
-    port: 5157,
-    host: "0.0.0.0",
-    allowedHosts: true,
-
-  },
-});
+  plugins: [react()],
+})

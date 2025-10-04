@@ -1,0 +1,61 @@
+.form-signin {
+  width: 100%;
+  max-width: 330px;
+  padding: 15px;
+  margin: auto;
+}
+
+.btn-block {
+  display: block;
+  width: 100%;
+}
+
+.login-form button {
+  margin-top: 15px;
+}
+
+.login-form input:first-child {
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.login-form input:nth-child(2) {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.login-form .form-control {
+  position: relative;
+  box-sizing: border-box;
+  height: auto;
+  padding: 10px;
+  font-size: 16px;
+}
+
+.join-room {
+  width: 800px;
+  margin: 0 auto;
+}
+
+.room {
+  position: relative;
+  min-height: 500px;
+  background: black;
+  border-radius: 15px;
+}
+
+.local-stream {
+  width: 140px;
+  position: absolute;
+  z-index: 10;
+  right: 10px;
+  bottom: 10px;
+  border-radius: 15px;
+}
+
+.room video {
+  width: 100%;
+  max-height: 400px;
+  background: black;
+  border-radius: 15px;
+}
