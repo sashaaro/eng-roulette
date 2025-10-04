@@ -5,7 +5,7 @@ const config = {
 }
 
 const roomUrl = new URL(config.roomURL);
-config.roomWS = (roomUrl.protocol === "https" ? "wss" : "ws") + ":" + roomUrl.host
-
+config.roomWS = (roomUrl.protocol === "https:" ? "wss" : "ws") + ":" + roomUrl.hostname + roomUrl.pathname + "/ws";
+console.log(roomUrl, config.roomWS)
 
 export default config;

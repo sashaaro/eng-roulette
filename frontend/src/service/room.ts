@@ -56,7 +56,7 @@ export class RoomService {
 
     private async createWS(token: string): Promise<WebSocket> {
         if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
-            const wsUrl = `${config.roomWS}/ws?jwt=${token}`;
+            const wsUrl = `${config.roomWS}?jwt=${token}`;
             this.ws = new WebSocket(wsUrl);
 
             const { callback, promise } = createPromiseWithCallback<Event>();
